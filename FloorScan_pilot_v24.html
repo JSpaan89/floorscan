@@ -1,0 +1,2918 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FloorScan — Gpi Tanks</title>
+
+<!-- PWA: web app manifest (Android Chrome/Edge) -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0F6E56">
+<meta name="application-name" content="FloorScan">
+<meta name="description" content="Voortgangsregistratie van tankvloer-werkbonnen via QR-scan en foto's.">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root {
+  --teal: #00A9AB;
+  --teal-dark: #0F6E56;
+  --teal-light: #E1F5EE;
+  --amber: #EF9F27;
+  --amber-light: #FAEEDA;
+  --amber-dark: #854F0B;
+  --red: #E24B4A;
+  --red-light: #FCEBEB;
+  --green: #639922;
+  --grey-50: #F5F5F5;
+  --grey-100: #EAEAEA;
+  --grey-300: #C0C0C0;
+  --grey-500: #808080;
+  --grey-700: #444441;
+  --grey-900: #2C2C2A;
+  --border: #D9D9D9;
+  --text: #333333;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--text); background: var(--grey-50); font-size: 15px; line-height: 1.5; }
+button { font-family: inherit; }
+input, textarea, select { font-family: inherit; font-size: 15px; }
+
+/* App shell */
+.app { max-width: 1200px; margin: 0 auto; min-height: 100vh; background: white; }
+
+/* Header */
+.top { background: white; border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
+.top h1 { margin: 0; font-size: 18px; font-weight: 600; color: var(--teal-dark); }
+.top h1 .tag { color: var(--grey-500); font-weight: 400; font-size: 13px; margin-left: 8px; }
+.top-actions { display: flex; gap: 8px; }
+
+/* Breadcrumb */
+.crumbs { padding: 10px 20px; font-size: 13px; color: var(--grey-500); border-bottom: 1px solid var(--grey-100); background: var(--grey-50); }
+.crumbs a { color: var(--teal-dark); text-decoration: none; cursor: pointer; }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs .sep { margin: 0 6px; color: var(--grey-300); }
+
+/* Main */
+.main { padding: 20px; }
+h2 { margin: 0 0 16px; font-size: 22px; color: var(--text); font-weight: 600; }
+h3 { margin: 16px 0 8px; font-size: 15px; color: var(--grey-700); font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; }
+
+/* Buttons */
+.btn { padding: 10px 16px; font-size: 14px; border-radius: var(--radius); border: 1px solid var(--border); background: white; cursor: pointer; color: var(--text); display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s; }
+.btn:hover { background: var(--grey-50); }
+.btn.primary { background: var(--teal-dark); color: white; border-color: var(--teal-dark); }
+.btn.primary:hover { background: var(--teal); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--grey-500); }
+.btn.ghost:hover { color: var(--text); background: var(--grey-50); }
+.btn.danger { color: var(--red); }
+.btn.danger:hover { background: var(--red-light); }
+.btn.sm { padding: 6px 10px; font-size: 13px; }
+.btn.lg { padding: 14px 22px; font-size: 16px; }
+
+/* Cards */
+.card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.card-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+.card-row:hover { background: var(--grey-50); }
+.card-title { font-weight: 500; font-size: 16px; }
+.card-sub { font-size: 13px; color: var(--grey-500); margin-top: 2px; }
+
+/* Status dot */
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.dot.green { background: var(--green); }
+.dot.amber { background: var(--amber); }
+.dot.red { background: var(--red); }
+.dot.grey { background: var(--grey-300); }
+
+/* Forms */
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12px; color: var(--grey-500); margin-bottom: 4px; letter-spacing: 0.3px; text-transform: uppercase; font-weight: 500; }
+.field input, .field textarea, .field select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: white; }
+.field input:focus, .field textarea:focus, .field select:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-light); }
+.field textarea { resize: vertical; min-height: 60px; font-family: inherit; }
+
+/* Grid */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .grid-3 { grid-template-columns: 1fr; } }
+
+/* Overleg view panels */
+.panels { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 16px; }
+@media (max-width: 1100px) { .panels { grid-template-columns: 1fr; } }
+.panel { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.panel-label { font-size: 11px; font-weight: 600; letter-spacing: 0.7px; color: var(--grey-500); text-transform: uppercase; margin-bottom: 4px; }
+.panel-sub { font-size: 13px; color: var(--grey-500); margin-bottom: 14px; }
+
+/* Photos */
+.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px; margin-bottom: 12px; }
+.photo-thumb { aspect-ratio: 1; border-radius: 6px; background: var(--grey-100); position: relative; overflow: hidden; cursor: pointer; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-thumb .del { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.55); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 14px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.photo-hero { aspect-ratio: 4/3; border-radius: var(--radius); background: var(--grey-100); margin-bottom: 8px; overflow: hidden; }
+.photo-hero img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.photo-upload { border: 2px dashed var(--border); border-radius: var(--radius); padding: 24px; text-align: center; color: var(--grey-500); cursor: pointer; transition: border-color 0.2s; }
+.photo-upload:hover { border-color: var(--teal); color: var(--teal-dark); }
+.photo-upload input { display: none; }
+
+/* AI box */
+.ai-box { background: var(--amber-light); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px; }
+.ai-box .lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; color: var(--amber-dark); margin-bottom: 4px; text-transform: uppercase; }
+.ai-box .val { font-size: 18px; font-weight: 600; color: var(--amber-dark); margin-bottom: 4px; }
+.ai-box .text { font-size: 13px; color: var(--amber-dark); line-height: 1.4; }
+.ai-box.empty { background: var(--grey-50); }
+.ai-box.empty .lbl, .ai-box.empty .val, .ai-box.empty .text { color: var(--grey-500); }
+
+/* Percent buttons */
+.pct-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.pct-btn { padding: 14px 4px; font-size: 15px; font-weight: 500; border: 1px solid var(--border); border-radius: var(--radius); background: white; cursor: pointer; color: var(--grey-700); }
+.pct-btn:hover { background: var(--grey-50); }
+.pct-btn.active { border-color: var(--teal-dark); background: var(--teal-light); color: var(--teal-dark); border-width: 2px; padding: 13px 3px; }
+.pct-btn.ai-suggested { border-color: var(--amber); background: var(--amber-light); color: var(--amber-dark); }
+
+/* Progress bar */
+.progress { height: 6px; background: var(--grey-100); border-radius: 3px; overflow: hidden; margin: 8px 0 2px; }
+.progress-fill { height: 100%; background: var(--grey-500); transition: width 0.3s; }
+
+/* Status banner */
+.status-banner { padding: 10px 14px; border-radius: var(--radius); font-size: 14px; margin-bottom: 16px; font-weight: 500; }
+.status-banner.green { background: #EAF3DE; color: var(--green); }
+.status-banner.amber { background: var(--amber-light); color: var(--amber-dark); }
+.status-banner.red { background: var(--red-light); color: var(--red); }
+.status-banner.grey { background: var(--grey-100); color: var(--grey-500); }
+
+/* Empty state */
+.empty { text-align: center; padding: 40px 20px; color: var(--grey-500); }
+.empty p { margin: 8px 0; }
+
+/* Modal */
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.modal { background: white; border-radius: var(--radius); padding: 20px; max-width: 500px; width: 100%; max-height: 85vh; overflow-y: auto; }
+.modal h3 { margin-top: 0; text-transform: none; letter-spacing: normal; font-size: 18px; color: var(--text); }
+.modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+/* Meta table */
+.meta { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13px; margin-bottom: 14px; }
+.meta dt { color: var(--grey-500); }
+.meta dd { margin: 0; }
+
+/* Print layout (for tablet big-screen mirroring — remove app chrome) */
+@media (min-width: 1100px) {
+  .app { max-width: none; }
+}
+
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--grey-900); color: white; padding: 10px 18px; border-radius: var(--radius); font-size: 14px; z-index: 200; animation: toastIn 0.2s; }
+@keyframes toastIn { from { transform: translate(-50%, 20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+
+/* Sync status in topbar */
+.sync-status { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: var(--radius); font-size: 12px; cursor: pointer; border: 1px solid var(--border); background: white; color: var(--grey-700); }
+.sync-status:hover { background: var(--grey-50); }
+.sync-status.ok { background: var(--teal-light); border-color: var(--teal); color: var(--teal-dark); }
+.sync-status.warn { background: var(--amber-light); border-color: var(--amber); color: var(--amber-dark); }
+.sync-status.off { color: var(--grey-500); }
+.sync-status .dot { width: 8px; height: 8px; }
+.sync-meta { font-size: 11px; color: var(--grey-500); padding: 4px 20px 10px; background: var(--grey-50); border-bottom: 1px solid var(--grey-100); }
+
+/* Current week badge / highlights */
+.week-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--teal-light); color: var(--teal-dark); font-size: 12px; font-weight: 600; letter-spacing: 0.3px; }
+.week-pill.amber { background: var(--amber-light); color: var(--amber-dark); }
+.week-pill.grey { background: var(--grey-100); color: var(--grey-700); }
+.card.current-week { border-color: var(--teal); border-width: 2px; background: linear-gradient(180deg, var(--teal-light) 0%, white 30%); }
+.card.current-week .card-title::before { content: '\2605 '; color: var(--teal-dark); }
+
+/* Home: current-week panel */
+.cw-banner { background: linear-gradient(135deg, var(--teal-dark) 0%, var(--teal) 100%); color: white; padding: 14px 18px; border-radius: var(--radius); margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cw-banner h3 { color: white; margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; opacity: 0.9; }
+.cw-banner .cw-num { font-size: 28px; font-weight: 700; line-height: 1; margin-top: 2px; }
+.cw-banner .cw-dates { font-size: 13px; opacity: 0.85; margin-top: 2px; }
+.cw-banner .cw-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.cw-banner .btn { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); color: white; }
+.cw-banner .btn:hover { background: rgba(255,255,255,0.25); }
+.cw-banner .btn.primary { background: white; color: var(--teal-dark); border-color: white; }
+.cw-banner .btn.primary:hover { background: var(--grey-50); }
+
+/* QR scan related */
+.qr-reader { width: 100%; max-width: 420px; margin: 0 auto; }
+.qr-reader video { width: 100% !important; border-radius: var(--radius); }
+.qr-step { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--radius); background: var(--grey-50); margin-bottom: 8px; }
+.qr-step.active { background: var(--teal-light); color: var(--teal-dark); border: 1px solid var(--teal); font-weight: 500; }
+.qr-step.done { background: #EAF3DE; color: var(--green); }
+.qr-step .num { font-size: 18px; font-weight: 700; width: 28px; height: 28px; border-radius: 50%; background: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.qr-step.done .num::after { content: '\2713'; }
+.qr-step.done .num { color: var(--green); font-size: 0; }
+.qr-step.done .num::after { font-size: 16px; }
+.qr-code-box { display: flex; flex-direction: column; align-items: center; padding: 12px; background: white; border: 1px solid var(--border); border-radius: var(--radius); }
+.qr-code-box canvas, .qr-code-box img { display: block; }
+.qr-code-box .cap { font-size: 12px; color: var(--grey-500); margin-top: 8px; font-family: monospace; }
+.photo-label { font-size: 11px; color: var(--grey-500); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px; margin-bottom: 2px; font-weight: 600; }
+.photo-side-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.photo-side { aspect-ratio: 4/3; background: var(--grey-100); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+.photo-side img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-side .side-label { position: absolute; bottom: 4px; left: 4px; background: rgba(0,0,0,0.6); color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.3px; }
+.photo-side.empty { color: var(--grey-500); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; text-align: center; padding: 8px; }
+
+/* Task checklist — leesbaar op werkvloer */
+.task-checklist { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.task-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; background: white; min-height: 56px; transition: background 0.15s, border-color 0.15s; }
+.task-row:hover { background: var(--grey-50); }
+.task-row input[type="checkbox"] { width: 24px; height: 24px; flex-shrink: 0; margin: 0; cursor: pointer; accent-color: var(--teal-dark); }
+.task-row .task-text { font-size: 16px; line-height: 1.35; color: var(--text); flex: 1; word-break: break-word; }
+.task-row.done { background: #EAF3DE; border-color: var(--green); }
+.task-row.done .task-text { text-decoration: line-through; color: var(--grey-500); }
+
+/* Mobile-first */
+@media (max-width: 700px) {
+  html, body { font-size: 16px; }
+  .top { padding: 10px 14px; }
+  .top h1 { font-size: 16px; }
+  .top h1 .tag { display: none; }
+  .top-actions { gap: 6px; }
+  .week-pill { padding: 6px 10px; font-size: 13px; }
+  .crumbs { padding: 8px 14px; font-size: 13px; }
+  .main { padding: 14px; }
+  h2 { font-size: 20px; }
+  .btn { padding: 12px 16px; font-size: 15px; min-height: 44px; }
+  .btn.sm { padding: 8px 12px; font-size: 14px; min-height: 36px; }
+  .btn.lg { padding: 16px 22px; font-size: 17px; }
+  .card { padding: 14px; }
+  .card-title { font-size: 17px; }
+  .card-sub { font-size: 14px; }
+  .field input, .field textarea, .field select { padding: 12px 14px; font-size: 16px; min-height: 44px; }
+  .panels { gap: 10px; }
+  .panel { padding: 14px; }
+  .pct-btn { padding: 16px 4px; font-size: 17px; min-height: 56px; }
+  .photo-upload { padding: 18px; font-size: 15px; }
+  .modal { padding: 16px; max-width: 95vw; }
+  .cw-banner { padding: 12px 14px; }
+  .cw-banner .cw-num { font-size: 22px; }
+  .qr-step { padding: 14px 16px; min-height: 56px; }
+  .qr-step .num { width: 32px; height: 32px; font-size: 18px; }
+  .task-row { padding: 14px 16px; min-height: 60px; }
+  .task-row .task-text { font-size: 17px; }
+  .task-row input[type="checkbox"] { width: 28px; height: 28px; }
+  .photo-side-row { grid-template-columns: 1fr; gap: 8px; }
+}
+
+/* PWA standalone mode (homescreen icon launch op Android tablets) */
+@media all and (display-mode: standalone) {
+  body { background: var(--teal-dark); }
+  .app {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+}
+
+/* In-app PWA install / update banner (rendered via JS, styled here) */
+.pwa-banner {
+  position: fixed;
+  left: 12px; right: 12px; bottom: 12px;
+  background: var(--teal-dark);
+  color: white;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  z-index: 9999;
+  font-size: 14px;
+}
+.pwa-banner button {
+  background: white;
+  color: var(--teal-dark);
+  border: none;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+}
+.pwa-banner .pwa-close {
+  background: transparent;
+  color: white;
+  font-size: 18px;
+  padding: 4px 8px;
+  font-weight: normal;
+}
+
+/* JSON import preview modal helpers */
+.json-preview-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--grey-100);
+  font-size: 14px;
+}
+.json-preview-row:last-child { border-bottom: none; }
+.json-preview-row .lbl { color: var(--grey-500); }
+.json-preview-row .val { font-weight: 500; color: var(--text); }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+// ------------------------------------------------------------------
+// FloorScan Pilot — Gpi Tanks v2.4 (PWA-enabled, Android-only)
+// Single-file HTML app: localStorage + auto-sync (FSA) op desktop,
+// classic upload/download fallback voor Android tablet,
+// Excel-import (2-row header parser), QR-scan, in-app camera,
+// huidige week altijd zichtbaar, weekdoel als afvinkbare checklist.
+//
+// v2.4 voegt toe (zonder bestaande logica te wijzigen):
+//  - Service worker + manifest → installeerbaar op Android Chrome/Edge, offline-shell
+//  - Web Share API + auto-naam in JSON-export (Android OS-deelmenu)
+//  - Soepelere accept-types + foutafhandeling in JSON-import
+//  - Validatie + preview-modal voor import (vervang of merge)
+// Doel-platform: Android tablets (Chrome/Edge) + Windows desktop (Chrome/Edge).
+// ------------------------------------------------------------------
+const FLOORSCAN_VERSION = 'v2.4.0';
+
+const STORAGE_KEY = 'floorscan_v2';
+const USER_KEY = 'floorscan_user';
+const IDB_NAME = 'floorscan_db';
+const IDB_STORE = 'settings';
+const IDB_HANDLE_KEY = 'sharedHandle';
+const IDB_EXCEL_KEY = 'excelHandle';
+const POLL_INTERVAL = 5000;
+const WRITE_DEBOUNCE = 600;
+const SELF_WRITE_GRACE = 3500;
+const PART_TO_ZONE = { TB: 'TB', M: 'Hal M', L: 'Hal L', ISO: 'ISO', PREP: 'PREP' };
+
+// ---------- State ----------
+let state = {
+  projects: [],
+  _meta: {},
+  view: 'home',
+  projectId: null,
+  werkbonId: null,
+  weekId: null,
+  modal: null,
+};
+
+// ---------- File sync (File System Access API) ----------
+let fileHandle = null;
+let pendingHandle = null;
+let lastKnownModified = 0;
+let lastWriteStamp = 0;
+let writeTimer = null;
+let pollingTimer = null;
+let syncStatus = 'off'; // 'off' | 'ok' | 'warn'
+
+// Excel-koppeling (Productionplans Lopik.xlsx)
+let excelHandle = null;
+let excelPendingHandle = null;
+
+function fsaSupported() { return 'showOpenFilePicker' in window && 'showSaveFilePicker' in window; }
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => { e.target.result.createObjectStore(IDB_STORE); };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSet(key, value) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbDel(key) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function getUsername() { return localStorage.getItem(USER_KEY) || ''; }
+function setUsername(n) { localStorage.setItem(USER_KEY, n); }
+
+async function connectSharedFile(mode) {
+  if (!fsaSupported()) {
+    alert('Gedeelde opslag werkt alleen in Chrome of Edge (desktop of Android).');
+    return;
+  }
+  try {
+    let h;
+    if (mode === 'new') {
+      h = await window.showSaveFilePicker({
+        suggestedName: 'floorscan_data.json',
+        types: [{ description: 'FloorScan data', accept: { 'application/json': ['.json'] } }]
+      });
+      fileHandle = h;
+      await writeToFile(true);
+      await idbSet(IDB_HANDLE_KEY, h);
+      startPolling();
+      setSync('ok');
+      toast('Nieuw bestand aangemaakt: ' + h.name);
+    } else {
+      const picked = await window.showOpenFilePicker({
+        types: [{ description: 'FloorScan data', accept: { 'application/json': ['.json'] } }]
+      });
+      h = picked[0];
+      fileHandle = h;
+      const imported = await readFromFile();
+      if (imported) {
+        if (state.projects.length) toast('Gedeelde data geladen van ' + h.name);
+      } else {
+        await writeToFile(true);
+        toast('Gekoppeld en huidige data weggeschreven');
+      }
+      await idbSet(IDB_HANDLE_KEY, h);
+      startPolling();
+      setSync('ok');
+      render();
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('Koppelen mislukt: ' + e.message);
+  }
+}
+
+async function disconnectSharedFile() {
+  if (!confirm('Koppeling met gedeeld bestand opheffen? Data blijft lokaal bewaard.')) return;
+  fileHandle = null;
+  pendingHandle = null;
+  if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
+  await idbDel(IDB_HANDLE_KEY);
+  setSync('off');
+  render();
+  toast('Ontkoppeld');
+}
+
+async function tryRestoreHandle() {
+  if (!fsaSupported()) return;
+  try {
+    const h = await idbGet(IDB_HANDLE_KEY);
+    if (!h) return;
+    const perm = await h.queryPermission({ mode: 'readwrite' });
+    if (perm === 'granted') {
+      fileHandle = h;
+      await readFromFile();
+      startPolling();
+      setSync('ok');
+    } else {
+      pendingHandle = h;
+      setSync('warn');
+    }
+  } catch (e) { /* handle weg of ongeldig */ }
+}
+
+async function reactivateHandle() {
+  if (!pendingHandle) return;
+  try {
+    const perm = await pendingHandle.requestPermission({ mode: 'readwrite' });
+    if (perm === 'granted') {
+      fileHandle = pendingHandle;
+      pendingHandle = null;
+      await readFromFile();
+      startPolling();
+      setSync('ok');
+      render();
+      toast('Heractiveerd');
+    } else {
+      alert('Toestemming geweigerd');
+    }
+  } catch (e) { alert('Heractiveren mislukt: ' + e.message); }
+}
+
+async function readFromFile() {
+  if (!fileHandle) return false;
+  const file = await fileHandle.getFile();
+  lastKnownModified = file.lastModified;
+  const text = await file.text();
+  if (!text.trim()) return false;
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && Array.isArray(parsed.projects)) {
+      state.projects = parsed.projects;
+      state._meta = parsed._meta || {};
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects: state.projects, _meta: state._meta })); } catch (e) {}
+      return true;
+    }
+  } catch (e) { console.error('Parse mislukt', e); }
+  return false;
+}
+
+async function writeToFile(force = false) {
+  if (!fileHandle) return;
+  try {
+    state._meta = state._meta || {};
+    state._meta.lastModifiedBy = getUsername() || 'onbekend';
+    state._meta.lastModifiedAt = new Date().toISOString();
+    state._meta.version = (state._meta.version || 0) + 1;
+    const payload = { projects: state.projects, _meta: state._meta };
+    const stream = await fileHandle.createWritable();
+    await stream.write(JSON.stringify(payload, null, 2));
+    await stream.close();
+    const file = await fileHandle.getFile();
+    lastKnownModified = file.lastModified;
+    lastWriteStamp = Date.now();
+    setSync('ok');
+  } catch (e) {
+    console.error('Schrijven mislukt', e);
+    setSync('warn');
+    toast('Schrijven naar bestand mislukt — check koppeling');
+  }
+}
+
+function startPolling() {
+  if (pollingTimer) clearInterval(pollingTimer);
+  pollingTimer = setInterval(async () => {
+    if (!fileHandle) return;
+    try {
+      const file = await fileHandle.getFile();
+      const sinceSelfWrite = Date.now() - lastWriteStamp;
+      if (file.lastModified > lastKnownModified && sinceSelfWrite > SELF_WRITE_GRACE) {
+        const before = JSON.stringify(state.projects);
+        await readFromFile();
+        const after = JSON.stringify(state.projects);
+        if (before !== after) {
+          const by = state._meta && state._meta.lastModifiedBy ? state._meta.lastModifiedBy : 'ander apparaat';
+          toast('Bijgewerkt door ' + by);
+          render();
+        }
+      }
+    } catch (e) {
+      setSync('warn');
+    }
+  }, POLL_INTERVAL);
+}
+
+function setSync(s) {
+  syncStatus = s;
+  const existing = document.querySelector('.top');
+  if (existing) existing.replaceWith(renderTop());
+}
+
+// ---------- Excel import (Productionplans Lopik.xlsx) ----------
+
+// MOBIELE FALLBACK: leest een Excel via klassieke <input>, parst eenmalig zonder live-link.
+// Werkt op Android Chrome/Edge en desktop Chrome/Edge — gebruikt geen FSA.
+function importExcelViaPlainInput() {
+  if (typeof XLSX === 'undefined') {
+    alert('SheetJS niet geladen — ververs de pagina met internetverbinding.');
+    return;
+  }
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.setAttribute('accept', '.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  inp.style.position = 'fixed'; inp.style.left = '-9999px';
+  inp.onchange = async e => {
+    const f = e.target.files && e.target.files[0];
+    inp.remove();
+    if (!f) return;
+    let workbook;
+    try {
+      const buf = await f.arrayBuffer();
+      workbook = XLSX.read(buf, { type: 'array', cellDates: true });
+    } catch (err) {
+      alert('Excel lezen mislukt: ' + err.message);
+      return;
+    }
+    const parsed = parseProductionplansWorkbook(workbook);
+    if (!parsed.orders.length) { showExcelDiagnoseModal(workbook, parsed); return; }
+    showExcelPreviewModal(parsed);
+  };
+  document.body.appendChild(inp);
+  inp.click();
+}
+
+// MOBIELE FALLBACK: deel/download de huidige state als JSON.
+// v2.4: probeert eerst Web Share API (Android OS-deelmenu naar Files/Drive/Mail),
+// valt terug op klassieke download via <a> op desktop.
+function downloadDataAsFile() {
+  const payload = { projects: state.projects, _meta: state._meta || {} };
+  // Voeg lichte metadata toe voor latere import-validatie (achterwaarts compatibel)
+  payload._export = {
+    app: 'FloorScan',
+    version: typeof FLOORSCAN_VERSION === 'string' ? FLOORSCAN_VERSION : 'v2.4',
+    exported_at: new Date().toISOString(),
+    user: getUsername() || null,
+    project_count: state.projects.length
+  };
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const filename = buildExportFilename(state.projects.length);
+
+  // 1) Probeer Web Share API met file (Android beste UX → Files / Drive / Mail / WhatsApp)
+  if (navigator.canShare && typeof File !== 'undefined') {
+    try {
+      const file = new File([blob], filename, { type: 'application/json' });
+      if (navigator.canShare({ files: [file] })) {
+        navigator.share({
+          files: [file],
+          title: 'FloorScan export',
+          text: filename
+        }).then(() => {
+          toast(state.projects.length + ' projecten gedeeld');
+        }).catch(err => {
+          // AbortError = user annuleerde share-dialoog → géén fallback nodig
+          if (err && err.name === 'AbortError') return;
+          console.warn('[FloorScan] Web Share mislukt, fallback download:', err);
+          fallbackDownload(blob, filename);
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn('[FloorScan] Web Share niet bruikbaar, fallback download:', e);
+    }
+  }
+
+  // 2) Fallback: klassieke download
+  fallbackDownload(blob, filename);
+}
+
+function fallbackDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast(state.projects.length + ' projecten geëxporteerd');
+}
+
+function buildExportFilename(projectCount) {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+                '-' + pad(d.getHours()) + pad(d.getMinutes());
+  const cnt = projectCount != null ? '-' + projectCount + 'proj' : '';
+  return 'floorscan-' + stamp + cnt + '.json';
+}
+
+// MOBIELE FALLBACK: laad een gekozen JSON-bestand in (vervangt of merge'd state).
+// v2.4: soepele accept-types voor Android file pickers, validatie + preview-modal,
+// merge/vervang keuze in modal (defaultMode komt uit caller).
+function loadDataFromFile(merge) {
+  const defaultMode = merge ? 'merge' : 'replace';
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  // Meerdere accept-types: sommige Android file pickers (Samsung, Files by Google)
+  // filteren strikt op extension; text/plain en text/json als extra hint.
+  inp.setAttribute('accept', 'application/json,.json,text/json,text/plain');
+  inp.style.position = 'fixed'; inp.style.left = '-9999px';
+  inp.onchange = async e => {
+    const f = e.target.files && e.target.files[0];
+    inp.remove();
+    if (!f) return;
+
+    // Sanity check op bestandsgrootte (paranoia: voorkom 50MB JSON parse)
+    if (f.size > 50 * 1024 * 1024) {
+      alert('Bestand is groter dan 50 MB — onwaarschijnlijk een FloorScan-export.');
+      return;
+    }
+
+    let txt;
+    try {
+      txt = await f.text();
+    } catch (err) {
+      alert('Kon bestand niet lezen: ' + err.message);
+      return;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(txt);
+    } catch (err) {
+      alert('Geen geldig JSON-bestand.\n\n' +
+            'Tip: kies een bestand met de naam "floorscan-..." en de extensie .json.\n' +
+            (f.name ? 'Gekozen: ' + f.name : '') +
+            '\n\nFout: ' + err.message);
+      return;
+    }
+
+    // Structurele validatie
+    if (!parsed || typeof parsed !== 'object') {
+      alert('Bestand bevat geen geldig FloorScan-object.');
+      return;
+    }
+    if (!Array.isArray(parsed.projects)) {
+      alert('Bestand mist het verwachte "projects"-veld. Mogelijk verkeerd bestand?\n\n' +
+            (f.name ? 'Gekozen: ' + f.name : ''));
+      return;
+    }
+
+    // Bouw preview-statistieken
+    const stats = computeImportStats(parsed);
+    showImportPreviewModal(parsed, stats, f, defaultMode);
+  };
+  document.body.appendChild(inp);
+  inp.click();
+}
+
+// Bereken samenvattende cijfers van een te-importeren payload
+function computeImportStats(parsed) {
+  let werkbonCount = 0, weekCount = 0, photoCount = 0, taskDoneCount = 0;
+  let exportedAt = null, exportedBy = null, exportVersion = null;
+  (parsed.projects || []).forEach(p => {
+    (p.werkbonnen || []).forEach(w => {
+      werkbonCount++;
+      (w.weeks || []).forEach(wk => {
+        weekCount++;
+        if (wk.photos && wk.photos.length) photoCount += wk.photos.length;
+        if (wk.tasks_done && typeof wk.tasks_done === 'object') {
+          taskDoneCount += Object.values(wk.tasks_done).filter(Boolean).length;
+        }
+      });
+    });
+  });
+  if (parsed._export) {
+    exportedAt = parsed._export.exported_at || null;
+    exportedBy = parsed._export.user || null;
+    exportVersion = parsed._export.version || null;
+  }
+  return {
+    projectCount: parsed.projects.length,
+    werkbonCount,
+    weekCount,
+    photoCount,
+    taskDoneCount,
+    exportedAt,
+    exportedBy,
+    exportVersion
+  };
+}
+
+// Toon de import-preview met conflict-info en knoppen voor Vervangen/Samenvoegen
+function showImportPreviewModal(parsed, stats, file, defaultMode) {
+  const currentCount = state.projects.length;
+  const currentNumbers = new Set(state.projects.map(p => String(p.number)));
+  const importNumbers = parsed.projects.map(p => String(p.number));
+  const conflicts = importNumbers.filter(n => currentNumbers.has(n));
+  const newOnes = importNumbers.filter(n => !currentNumbers.has(n));
+
+  state.modal = {
+    render: m => {
+      m.appendChild(el('h3', {}, 'Bevestig import'));
+      m.appendChild(el('p', { style: 'font-size: 13px; color: var(--grey-500); margin-top: 0;' },
+        'Bestand: ', el('b', {}, file.name || '(onbekend)'),
+        ' · ', formatBytes(file.size)));
+
+      // Statistieken-blok
+      const statsBox = el('div', { style: 'background: var(--grey-50); border-radius: var(--radius); padding: 10px 14px; margin: 12px 0;' });
+      statsBox.appendChild(previewRow('Projecten in bestand', String(stats.projectCount)));
+      statsBox.appendChild(previewRow('Werkbonnen', String(stats.werkbonCount)));
+      statsBox.appendChild(previewRow('Weken met data', String(stats.weekCount)));
+      statsBox.appendChild(previewRow('Foto\'s', String(stats.photoCount)));
+      statsBox.appendChild(previewRow('Afgevinkte taken', String(stats.taskDoneCount)));
+      if (stats.exportedAt) {
+        const dt = new Date(stats.exportedAt);
+        const human = isNaN(dt.getTime()) ? stats.exportedAt :
+          dt.toLocaleString('nl-NL', { dateStyle: 'short', timeStyle: 'short' });
+        statsBox.appendChild(previewRow('Geëxporteerd op', human));
+      }
+      if (stats.exportedBy) statsBox.appendChild(previewRow('Door', stats.exportedBy));
+      if (stats.exportVersion) statsBox.appendChild(previewRow('App-versie', stats.exportVersion));
+      m.appendChild(statsBox);
+
+      // Conflict-info t.o.v. huidige state
+      const conflictBox = el('div', { style: 'background: var(--teal-light); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; font-size: 13px;' });
+      conflictBox.appendChild(el('div', {},
+        el('b', {}, 'Huidig: '), currentCount + ' projecten op dit apparaat.'));
+      if (conflicts.length) {
+        conflictBox.appendChild(el('div', { style: 'margin-top: 4px;' },
+          el('b', {}, conflicts.length + ' conflicterend'),
+          ': ' + conflicts.slice(0, 6).join(', ') + (conflicts.length > 6 ? ', …' : '')));
+      }
+      if (newOnes.length) {
+        conflictBox.appendChild(el('div', { style: 'margin-top: 4px;' },
+          el('b', {}, newOnes.length + ' nieuw'),
+          ': ' + newOnes.slice(0, 6).join(', ') + (newOnes.length > 6 ? ', …' : '')));
+      }
+      m.appendChild(conflictBox);
+
+      // Mode-keuze
+      m.appendChild(el('div', { style: 'font-size: 13px; color: var(--grey-700); margin-bottom: 8px;' },
+        'Hoe wil je deze data toevoegen?'));
+
+      const explainReplace = el('div', { style: 'font-size: 12px; color: var(--grey-500); margin-top: 6px; line-height: 1.4;' },
+        '• ', el('b', {}, 'Vervangen'), ': huidige data wordt overschreven door bestand. ' +
+        (currentCount > 0 ? 'Foto\'s en voortgang die alleen op dit apparaat staan gaan verloren.' : 'Geen risico — apparaat is leeg.'));
+      const explainMerge = el('div', { style: 'font-size: 12px; color: var(--grey-500); margin-top: 6px; line-height: 1.4;' },
+        '• ', el('b', {}, 'Samenvoegen'), ': bestand wordt over huidige data gelegd. ' +
+        'Foto\'s die al lokaal stonden blijven behouden, ook bij conflicten. Werkbon-structuur volgt het bestand.');
+      m.appendChild(explainReplace);
+      m.appendChild(explainMerge);
+
+      // Knoppen
+      const actions = el('div', { class: 'actions', style: 'margin-top: 16px; display: flex; flex-wrap: wrap; gap: 8px;' });
+      actions.appendChild(el('button', { class: 'btn', onClick: closeModal }, 'Annuleer'));
+      const replaceBtn = el('button', {
+        class: defaultMode === 'replace' ? 'btn primary' : 'btn',
+        onClick: () => { closeModal(); doImport(parsed, false); }
+      }, '↻ Vervangen (' + currentCount + ' → ' + stats.projectCount + ')');
+      const mergeBtn = el('button', {
+        class: defaultMode === 'merge' ? 'btn primary' : 'btn',
+        onClick: () => { closeModal(); doImport(parsed, true); }
+      }, '⊕ Samenvoegen');
+      // Volgorde: standaardkeuze rechts (laatste = primary)
+      if (defaultMode === 'merge') {
+        actions.appendChild(replaceBtn);
+        actions.appendChild(mergeBtn);
+      } else {
+        actions.appendChild(mergeBtn);
+        actions.appendChild(replaceBtn);
+      }
+      m.appendChild(actions);
+    }
+  };
+  render();
+}
+
+function previewRow(label, value) {
+  return el('div', { class: 'json-preview-row' },
+    el('span', { class: 'lbl' }, label),
+    el('span', { class: 'val' }, value));
+}
+
+function formatBytes(n) {
+  if (n == null) return '?';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+// De daadwerkelijke import-logica (bestaande gedrag, geïsoleerd uit picker-flow)
+function doImport(parsed, merge) {
+  try {
+    if (merge) {
+      const existing = new Map(state.projects.map(p => [String(p.number), p]));
+      let added = 0, replaced = 0;
+      parsed.projects.forEach(np => {
+        const ex = existing.get(String(np.number));
+        if (ex) {
+          // Behoud foto's per werkbon/week, neem rest uit nieuwe
+          const oldByKey = new Map();
+          (ex.werkbonnen || []).forEach(w => oldByKey.set(String(w.excel_key || w.number), w));
+          (np.werkbonnen || []).forEach(nw => {
+            const ow = oldByKey.get(String(nw.excel_key || nw.number));
+            if (ow) {
+              // Per-week samenvoegen
+              const owWeeks = new Map((ow.weeks || []).map(w => [w.week, w]));
+              (nw.weeks || []).forEach(w => {
+                const o = owWeeks.get(w.week);
+                if (o) {
+                  if (o.photos && o.photos.length) w.photos = o.photos;
+                  if (o.sides) w.sides = o.sides;
+                  if (o.confirmed_pct != null) w.confirmed_pct = o.confirmed_pct;
+                  if (o.remark) w.remark = o.remark;
+                  if (o.tasks_done && Object.keys(o.tasks_done).length) w.tasks_done = o.tasks_done;
+                }
+              });
+            }
+          });
+          // Vervang werkbonnen door nieuwe (met behoud van photos via bovenstaand)
+          ex.werkbonnen = np.werkbonnen;
+          replaced++;
+        } else {
+          state.projects.push(np);
+          added++;
+        }
+      });
+      save(); render();
+      toast('Merge: +' + added + ' nieuwe, ' + replaced + ' bijgewerkt');
+    } else {
+      state.projects = parsed.projects;
+      state._meta = parsed._meta || {};
+      save(); render();
+      toast('Geladen: ' + state.projects.length + ' projecten');
+    }
+  } catch (err) {
+    alert('Import mislukt: ' + err.message);
+  }
+}
+
+async function connectExcelFile() {
+  if (!fsaSupported()) {
+    alert('Excel koppelen werkt alleen in Chrome of Edge.');
+    return;
+  }
+  if (typeof XLSX === 'undefined') {
+    alert('Excel-bibliotheek kon niet laden (check internetverbinding).');
+    return;
+  }
+  try {
+    const picked = await window.showOpenFilePicker({
+      types: [{ description: 'Excel bouwplan', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx', '.xlsm'] } }]
+    });
+    excelHandle = picked[0];
+    await idbSet(IDB_EXCEL_KEY, excelHandle);
+    toast('Excel gekoppeld: ' + excelHandle.name);
+    await importFromExcel({ autoConfirm: false });
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('Excel koppelen mislukt: ' + e.message);
+  }
+}
+
+async function disconnectExcelFile() {
+  if (!confirm('Excel-koppeling opheffen? Ingeladen werkbonnen blijven bewaard.')) return;
+  excelHandle = null;
+  excelPendingHandle = null;
+  await idbDel(IDB_EXCEL_KEY);
+  render();
+  toast('Excel ontkoppeld');
+}
+
+async function tryRestoreExcelHandle() {
+  if (!fsaSupported()) return;
+  try {
+    const h = await idbGet(IDB_EXCEL_KEY);
+    if (!h) return;
+    const perm = await h.queryPermission({ mode: 'read' });
+    if (perm === 'granted') {
+      excelHandle = h;
+    } else {
+      excelPendingHandle = h;
+    }
+  } catch (e) { /* handle weg */ }
+}
+
+async function reactivateExcelHandle() {
+  if (!excelPendingHandle) return false;
+  try {
+    const perm = await excelPendingHandle.requestPermission({ mode: 'read' });
+    if (perm === 'granted') {
+      excelHandle = excelPendingHandle;
+      excelPendingHandle = null;
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+async function importFromExcel(opts = {}) {
+  if (!excelHandle) {
+    if (excelPendingHandle) {
+      const ok = await reactivateExcelHandle();
+      if (!ok) { alert('Geen toegang tot Excel-bestand.'); return; }
+    } else {
+      await connectExcelFile();
+      return;
+    }
+  }
+  if (typeof XLSX === 'undefined') {
+    alert('SheetJS niet geladen — open het bestand eerst met internetverbinding.');
+    return;
+  }
+  let workbook;
+  try {
+    const file = await excelHandle.getFile();
+    const buf = await file.arrayBuffer();
+    workbook = XLSX.read(buf, { type: 'array', cellDates: true });
+  } catch (e) {
+    alert('Excel lezen mislukt: ' + e.message);
+    return;
+  }
+  const parsed = parseProductionplansWorkbook(workbook);
+  if (!parsed.orders.length) {
+    showExcelDiagnoseModal(workbook, parsed);
+    return;
+  }
+  if (!opts.autoConfirm) {
+    showExcelPreviewModal(parsed);
+  } else {
+    applyExcelImport(parsed);
+  }
+}
+
+function parseProductionplansWorkbook(wb) {
+  const result = { orders: [], sheetName: '', headerRow: -1, weeksFound: [] };
+  let best = null;
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+    const parsed = tryParseSheet(rows);
+    if (parsed && parsed.orders.length > (best ? best.orders.length : 0)) {
+      best = { ...parsed, sheetName };
+    }
+  }
+  if (best) {
+    result.orders = best.orders;
+    result.sheetName = best.sheetName;
+    result.headerRow = best.headerRow;
+    result.weeksFound = best.weeksFound;
+  }
+  return result;
+}
+
+function tryParseSheet(rows) {
+  // Productionplans Lopik gebruikt een 2-rijen header:
+  //   rij 1: Order | SO | Week number | (leeg) | Week 3 | (merged) ... | Week 4 | ...
+  //   rij 2:                | Location | Part | Task | Status | VC Hours | Estimated | Planning | Task | ...
+  if (!rows || rows.length < 3) return null;
+  return parseTwoRowHeader(rows);
+}
+
+function parseTwoRowHeader(rows) {
+  // Zoek de 2-rijen header in de eerste 30 rijen
+  let h1 = -1;
+  for (let r = 0; r < Math.min(rows.length - 1, 30); r++) {
+    const r1 = (rows[r] || []).map(c => String(c || '').toLowerCase().trim());
+    const r2 = (rows[r + 1] || []).map(c => String(c || '').toLowerCase().trim());
+    const r1HasOrder = r1.some(t => t === 'order');
+    const r2HasPart = r2.some(t => t === 'part' || t === 'onderdeel');
+    if (r1HasOrder && r2HasPart) { h1 = r; break; }
+  }
+  if (h1 < 0) return null;
+  const headerRow = h1, secondHeaderRow = h1 + 1;
+  const r1raw = rows[h1] || [];
+  const r2raw = rows[h1 + 1] || [];
+  const maxCols = Math.max(r1raw.length, r2raw.length);
+
+  // Forward-fill rij 1 (voor merged Week-labels)
+  const r1ff = [];
+  let last = '';
+  for (let c = 0; c < maxCols; c++) {
+    const v = String(r1raw[c] || '').trim();
+    if (v) last = v;
+    r1ff.push(last);
+  }
+
+  // Base-kolommen
+  let orderCol = -1, soCol = -1, locCol = -1, partCol = -1;
+  for (let c = 0; c < maxCols; c++) {
+    const top = String(r1raw[c] || '').toLowerCase().trim();
+    const sub = String(r2raw[c] || '').toLowerCase().trim();
+    if (top === 'order' && orderCol < 0) orderCol = c;
+    if (top === 'so' && soCol < 0) soCol = c;
+    if ((sub === 'location' || sub === 'locatie') && locCol < 0) locCol = c;
+    if ((sub === 'part' || sub === 'onderdeel') && partCol < 0) partCol = c;
+  }
+  if (orderCol < 0 || partCol < 0) return null;
+
+  // Week-kolommen (5 sub-kols per week onder de "Week N" header)
+  const weekCols = {};
+  for (let c = 0; c < maxCols; c++) {
+    const top = String(r1ff[c] || '').trim();
+    const sub = String(r2raw[c] || '').toLowerCase().trim();
+    const m = top.match(/^week\s*(\d{1,2})$/i);
+    if (!m) continue;
+    const wk = parseInt(m[1]);
+    if (wk < 1 || wk > 53) continue;
+    if (!weekCols[wk]) weekCols[wk] = {};
+    if (sub === 'status') weekCols[wk].status = c;
+    else if (sub.includes('vc')) weekCols[wk].vc = c;
+    else if (sub.includes('estim') || sub === 'est') weekCols[wk].est = c;
+    else if (sub.includes('plan')) weekCols[wk].plan = c;
+    else if (sub.includes('task') || sub.includes('taak') || sub.includes('description')) weekCols[wk].task = c;
+  }
+
+  // Loop data-rijen, forward-fill (Order, SO, Part)
+  let curOrder = '', curSO = '', curPart = '', curLoc = '';
+  const partsMap = new Map();
+  for (let r = secondHeaderRow + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const o = String(row[orderCol] || '').trim();
+    const s = soCol >= 0 ? String(row[soCol] || '').trim() : '';
+    const pRaw = String(row[partCol] || '').trim();
+    const loc = locCol >= 0 ? String(row[locCol] || '').trim() : '';
+    if (o) curOrder = o;
+    if (s) curSO = s;
+    if (pRaw) { curPart = pRaw; curLoc = loc; }
+    if (!curOrder || !/^\d+$/.test(curOrder) || !curPart) continue;
+
+    const key = curOrder + '|' + curSO + '|' + curPart;
+    if (!partsMap.has(key)) {
+      partsMap.set(key, { order: curOrder, so: curSO, part: curPart, location: curLoc, weeks: new Map() });
+    }
+    const grp = partsMap.get(key);
+
+    for (const wkStr of Object.keys(weekCols)) {
+      const wk = parseInt(wkStr);
+      const wc = weekCols[wk];
+      const task = wc.task !== undefined ? String(row[wc.task] || '').trim() : '';
+      if (task && task.toLowerCase() === 'total') continue;
+      const status = wc.status !== undefined ? numOrZero(row[wc.status]) : 0;
+      const vc = wc.vc !== undefined ? numOrZero(row[wc.vc]) : 0;
+      const est = wc.est !== undefined ? numOrZero(row[wc.est]) : 0;
+      const pln = wc.plan !== undefined ? numOrZero(row[wc.plan]) : 0;
+      if (!task && !status && !vc && !est && !pln) continue;
+      if (!grp.weeks.has(wk)) grp.weeks.set(wk, { week: wk, tasks: [], status: 0, vc: 0, est: 0, plan: 0 });
+      const w = grp.weeks.get(wk);
+      if (task && !w.tasks.includes(task)) w.tasks.push(task);
+      if (status) w.status = status;
+      w.vc += vc;
+      w.est += est;
+      w.plan += pln;
+    }
+  }
+
+  // Aggregeer per Order
+  const ordersAgg = new Map();
+  for (const grp of partsMap.values()) {
+    if (!ordersAgg.has(grp.order)) ordersAgg.set(grp.order, { number: grp.order, location: '', parts: [] });
+    const inf = deriveWerkbonInfo(grp.part, grp.so, grp.location);
+    const weeks = Array.from(grp.weeks.values()).sort((a, b) => a.week - b.week);
+    ordersAgg.get(grp.order).parts.push({
+      partKey: inf.partKey, number: inf.werkbonNumber, description: grp.part, zone: inf.zone,
+      so: grp.so, excelPartText: grp.part, weeks
+    });
+  }
+  // Dedupliceer werkbon-nummers binnen één order met letter-suffix
+  for (const o of ordersAgg.values()) {
+    const seen = {};
+    o.parts.forEach(p => {
+      const base = p.number;
+      seen[base] = (seen[base] || 0) + 1;
+      if (seen[base] > 1) p.number = base + String.fromCharCode(96 + seen[base]);
+    });
+  }
+
+  return {
+    orders: Array.from(ordersAgg.values()),
+    headerRow: headerRow,
+    weeksFound: Object.keys(weekCols).map(Number).sort((a, b) => a - b)
+  };
+}
+
+function deriveWerkbonInfo(partText, so, location) {
+  const t = String(partText || '').toLowerCase().trim();
+  const soPart = String(parseInt(so) || 10).padStart(2, '0');
+  const m = t.match(/(\d{3,4})/);
+  if (m) {
+    const tail = m[1].padStart(3, '0');
+    return { werkbonNumber: soPart + tail, partKey: location || 'L', zone: zoneFromLocation(location) };
+  }
+  let X = null;
+  if (/top\s*&\s*bottom\s*head|top.*head|bottom.*head/.test(t)) {
+    return { werkbonNumber: soPart + '080', partKey: 'TB', zone: 'TB' };
+  }
+  if (/skirt|voetring/.test(t)) X = 5;
+  else if (/insulation|isolat/.test(t)) X = 7;
+  else if (/top.*final/.test(t)) X = 4;
+  else if (/bottom.*final/.test(t)) X = 4;
+  else if (/final.*assembly/.test(t)) X = 4;
+  else if (/top.*assembly/.test(t)) X = 1;
+  else if (/bottom.*assembly/.test(t)) X = 3;
+  else if (/installat|montage/.test(t)) X = 9;
+  if (X !== null) {
+    return { werkbonNumber: soPart + X + '00', partKey: location || (X === 7 ? 'ISO' : 'L'), zone: zoneFromLocation(location) || (X === 7 ? 'ISO' : 'Hal L') };
+  }
+  return { werkbonNumber: soPart + '900', partKey: location || 'L', zone: zoneFromLocation(location) || 'Hal L' };
+}
+
+function zoneFromLocation(loc) {
+  const l = String(loc || '').toLowerCase().trim();
+  if (l === 'm') return 'Hal M';
+  if (l === 'l') return 'Hal L';
+  if (l === 'tb') return 'TB';
+  if (l === 'iso') return 'ISO';
+  if (l === 'mon') return 'Hal L';
+  return '';
+}
+
+function _legacy_unused_oldHeader_ignored(rows) {
+  if (!rows || rows.length < 2) return null;
+  let headerRow = -1;
+  let headerAbove = -1;
+
+  const headers = (rows[headerRow] || []).map(c => String(c || '').trim());
+  const above = headerAbove >= 0 ? (rows[headerAbove] || []).map(c => String(c || '').trim()) : [];
+
+  const colIdx = { order: -1, so: -1, location: -1, part: -1, task: -1, status: -1, vc: -1, est: -1, plan: -1 };
+  const weekCols = {};
+
+  const aboveFilled = [];
+  let lastAbove = '';
+  for (let c = 0; c < Math.max(headers.length, above.length); c++) {
+    const v = (above[c] || '').trim();
+    if (v) lastAbove = v;
+    aboveFilled[c] = lastAbove;
+  }
+
+  for (let c = 0; c < headers.length; c++) {
+    const h = headers[c].toLowerCase();
+    const g = (aboveFilled[c] || '').toLowerCase();
+
+    const weekMatch = (h + ' ' + g).match(/\bw(?:eek)?\s*(\d{1,2})\b/i);
+    if (weekMatch) {
+      const wk = parseInt(weekMatch[1]);
+      if (wk >= 1 && wk <= 53) {
+        if (!weekCols[wk]) weekCols[wk] = {};
+        if (h === 'status' || h.includes('status')) weekCols[wk].status = c;
+        else if (h.includes('task') || h.includes('taak') || h.includes('description') || h.includes('omschrijv')) weekCols[wk].task = c;
+        else if (h === 'vc' || h.includes('vc hour')) weekCols[wk].vc = c;
+        else if (h.includes('estimated') || h === 'est' || h.includes('est hour')) weekCols[wk].est = c;
+        else if (h.includes('planning') || h === 'plan' || h.includes('plan hour')) weekCols[wk].plan = c;
+        else if (!weekCols[wk].task && h.length > 2) weekCols[wk].task = c;
+        continue;
+      }
+    }
+
+    if (h === 'order') colIdx.order = c;
+    else if (h === 'so') colIdx.so = c;
+    else if (h === 'location' || h === 'locatie') colIdx.location = c;
+    else if (h === 'part' || h === 'onderdeel') colIdx.part = c;
+    else if (h.includes('task') || h.includes('description') || h.includes('omschrijv')) { if (colIdx.task < 0) colIdx.task = c; }
+    else if (h === 'status') { if (colIdx.status < 0) colIdx.status = c; }
+    else if (h.includes('vc')) colIdx.vc = c;
+    else if (h.includes('estimated') || h === 'est') colIdx.est = c;
+    else if (h.includes('planning') || h === 'plan') colIdx.plan = c;
+  }
+
+  if (colIdx.order < 0 || colIdx.part < 0) return null;
+
+  const ordersMap = new Map();
+  for (let r = headerRow + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const order = String(row[colIdx.order] || '').trim();
+    if (!order || !/^\d/.test(order)) continue;
+    const part = String(row[colIdx.part] || '').trim();
+    if (!part) continue;
+
+    const taskBase = colIdx.task >= 0 ? String(row[colIdx.task] || '').trim() : '';
+    const location = colIdx.location >= 0 ? String(row[colIdx.location] || '').trim() : '';
+
+    if (!ordersMap.has(order)) {
+      ordersMap.set(order, { number: order, location, parts: new Map() });
+    }
+    const o = ordersMap.get(order);
+    if (!o.location && location) o.location = location;
+
+    const partKey = part.toUpperCase();
+    if (!o.parts.has(partKey)) {
+      o.parts.set(partKey, {
+        partKey,
+        number: partKey,
+        description: taskBase || partLabel(partKey),
+        zone: PART_TO_ZONE[partKey] || 'Hal L',
+        weeks: new Map(),
+      });
+    }
+    const p = o.parts.get(partKey);
+    if (taskBase && (!p.description || p.description === partLabel(partKey))) p.description = taskBase;
+
+    for (const wkStr of Object.keys(weekCols)) {
+      const wk = parseInt(wkStr);
+      const wc = weekCols[wk];
+      const status = wc.status !== undefined ? numOrZero(row[wc.status]) : 0;
+      const task = wc.task !== undefined ? String(row[wc.task] || '').trim() : '';
+      const vc = wc.vc !== undefined ? numOrZero(row[wc.vc]) : 0;
+      const est = wc.est !== undefined ? numOrZero(row[wc.est]) : 0;
+      const plan = wc.plan !== undefined ? numOrZero(row[wc.plan]) : 0;
+
+      if (!status && !task && !vc && !est && !plan) continue;
+
+      if (!p.weeks.has(wk)) {
+        p.weeks.set(wk, { week: wk, tasks: [], status: 0, vc: 0, est: 0, plan: 0 });
+      }
+      const w = p.weeks.get(wk);
+      if (status) w.status = status;
+      if (task && !w.tasks.includes(task)) w.tasks.push(task);
+      w.vc += vc;
+      w.est += est;
+      w.plan += plan;
+    }
+  }
+
+  const ordersArr = [];
+  for (const o of ordersMap.values()) {
+    const parts = [];
+    for (const p of o.parts.values()) {
+      const weeks = Array.from(p.weeks.values()).sort((a, b) => a.week - b.week);
+      parts.push({ partKey: p.partKey, number: p.number, description: p.description, zone: p.zone, weeks });
+    }
+    if (parts.length) ordersArr.push({ number: o.number, location: o.location, parts });
+  }
+
+  const weeksFound = Array.from(Object.keys(weekCols)).map(n => parseInt(n)).sort((a, b) => a - b);
+  return { orders: ordersArr, headerRow, weeksFound };
+}
+
+function partLabel(part) {
+  const map = { TB: 'Top & Bottom head (TB)', M: 'Assembly Hal M', L: 'Final assembly (L)', ISO: 'Insulation (ISO)', PREP: 'Preparation (PREP)' };
+  return map[part] || part;
+}
+
+function numOrZero(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  const n = Number(String(v).replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+}
+
+function applyExcelImport(parsed) {
+  let addedProjects = 0, addedWerkbonnen = 0, addedWeeks = 0, updatedWeeks = 0;
+  const cw = getCurrentWeek();
+  const importedProjectIds = new Set();
+
+  for (const o of parsed.orders) {
+    let project = state.projects.find(p => String(p.number).trim() === String(o.number).trim());
+    if (!project) {
+      project = { id: uid(), number: o.number, klant: '', description: '', werkbonnen: [] };
+      state.projects.push(project);
+      addedProjects++;
+    }
+    importedProjectIds.add(project.id);
+
+    for (const p of o.parts) {
+      const excelKey = o.number + '|' + (p.so || '') + '|' + (p.excelPartText || p.description || '');
+      let werkbon = project.werkbonnen.find(w => w.excel_key === excelKey)
+                 || project.werkbonnen.find(w => (w.number || '').toUpperCase() === p.number.toUpperCase() && !w.excel_key);
+      if (!werkbon) {
+        werkbon = {
+          id: uid(), number: p.number, description: p.description, zone: p.zone, so: p.so,
+          drawing_sheet: '', drawing_notes: '', excel_key: excelKey,
+          excel_part_text: p.excelPartText, weeks: [],
+        };
+        project.werkbonnen.push(werkbon);
+        addedWerkbonnen++;
+      } else {
+        werkbon.excel_key = excelKey;
+        werkbon.so = p.so;
+        werkbon.excel_part_text = p.excelPartText;
+        if (!werkbon.description || werkbon.description === partLabel(p.partKey)) werkbon.description = p.description;
+        if (!werkbon.zone) werkbon.zone = p.zone;
+      }
+
+      // Verwijder oude excel-weken die niet meer in plan staan (zonder verlies van bewerkte info)
+      const excelWeekNrs = new Set(p.weeks.map(w => w.week));
+      werkbon.weeks = werkbon.weeks.filter(w => {
+        if (w.source === 'excel' && !excelWeekNrs.has(w.week) && w.confirmed_pct == null && (!w.photos || !w.photos.length) && !w.remark) return false;
+        return true;
+      });
+
+      for (const wk of p.weeks) {
+        let week = werkbon.weeks.find(x => x.week === wk.week);
+        const weekdoelNew = wk.tasks.join(' · ');
+        const tasksNew = wk.tasks.slice();
+        const uurSamenvatting = [];
+        if (wk.vc > 0) uurSamenvatting.push('VC ' + wk.vc + 'u');
+        if (wk.est > 0) uurSamenvatting.push('Est ' + wk.est + 'u');
+        if (wk.plan > 0) uurSamenvatting.push('Plan ' + wk.plan + 'u');
+        if (!week) {
+          week = {
+            id: uid(), week: wk.week, weekdoel: weekdoelNew, tasks: tasksNew, tasks_done: {},
+            streef_pct: wk.status ? 100 : 50, photos: [], ai_pct: null, ai_toelichting: '',
+            confirmed_pct: null, remark: '', excel_status: wk.status,
+            vc_hours: wk.vc, estimated_hours: wk.est, planning_hours: wk.plan,
+            uurSummary: uurSamenvatting.join(' · '), source: 'excel',
+          };
+          werkbon.weeks.push(week);
+          addedWeeks++;
+        } else {
+          week.excel_status = wk.status; week.vc_hours = wk.vc; week.estimated_hours = wk.est; week.planning_hours = wk.plan;
+          week.uurSummary = uurSamenvatting.join(' · ');
+          if (weekdoelNew && (week.source === 'excel' || !week.weekdoel || !week.weekdoel.trim())) {
+            week.weekdoel = weekdoelNew; week.source = 'excel';
+            week.tasks = tasksNew;
+            const oldDone = week.tasks_done || {};
+            week.tasks_done = {};
+            tasksNew.forEach(t => { if (oldDone[t]) week.tasks_done[t] = oldDone[t]; });
+          }
+          updatedWeeks++;
+        }
+      }
+    }
+  }
+
+  // Completion check per geïmporteerd project
+  let completedFlagged = 0;
+  for (const project of state.projects) {
+    if (!importedProjectIds.has(project.id)) continue;
+    let hasFutureTask = false, hasAnyExcelWeek = false;
+    for (const w of project.werkbonnen || []) {
+      for (const wk of w.weeks || []) {
+        if (wk.source === 'excel') {
+          hasAnyExcelWeek = true;
+          if (wk.week >= cw && (wk.weekdoel || wk.estimated_hours > 0 || wk.planning_hours > 0)) hasFutureTask = true;
+        }
+      }
+    }
+    project.completed_per_buildingplan = hasAnyExcelWeek && !hasFutureTask;
+    if (project.completed_per_buildingplan) completedFlagged++;
+    project.last_excel_check_at = new Date().toISOString();
+    project.last_excel_check_week = cw;
+  }
+
+  state._meta = state._meta || {};
+  state._meta.lastExcelImportAt = new Date().toISOString();
+  state._meta.lastExcelImportBy = getUsername() || 'onbekend';
+  save(); render();
+  toast('Import klaar: +' + addedProjects + ' projecten · +' + addedWerkbonnen + ' werkbonnen · +' + addedWeeks + '/~' + updatedWeeks + ' weken' + (completedFlagged ? ' · ' + completedFlagged + '× klaar volgens bouwplan' : ''));
+}
+
+function showExcelDiagnoseModal(workbook, parsed) {
+  state.modal = {
+    render: m => {
+      m.appendChild(el('h3', {}, 'Geen bouwplan-regels gevonden'));
+      m.appendChild(el('p', { style: 'color: var(--grey-500); font-size: 13px;' },
+        'De parser kon geen header-rij vinden met de kolommen Order, Part en Task description. ' +
+        'Hieronder zie je per blad de eerste 8 rijen — kopieer of stuur dit zodat we de parser kunnen aanpassen.'));
+      const wrap = el('div', { style: 'max-height: 360px; overflow: auto; font-family: monospace; font-size: 11px; background: var(--grey-50); padding: 10px; border-radius: var(--radius);' });
+      workbook.SheetNames.forEach(name => {
+        const ws = workbook.Sheets[name];
+        if (!ws) return;
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+        wrap.appendChild(el('div', { style: 'font-weight: 700; color: var(--teal-dark); margin-top: 8px;' }, '== Blad: ' + name + ' (' + rows.length + ' rijen) =='));
+        rows.slice(0, 8).forEach((row, i) => {
+          const cells = row.map(c => String(c || '').slice(0, 18)).slice(0, 14).join(' | ');
+          wrap.appendChild(el('div', {}, 'r' + i + ': ' + cells));
+        });
+      });
+      m.appendChild(wrap);
+      m.appendChild(el('div', { class: 'actions' },
+        el('button', { class: 'btn primary', onClick: closeModal }, 'Sluiten')
+      ));
+    }
+  };
+  render();
+}
+
+function showExcelPreviewModal(parsed) {
+  state.modal = {
+    render: m => {
+      m.appendChild(el('h3', {}, 'Import uit Excel'));
+      m.appendChild(el('p', { style: 'color: var(--grey-500); font-size: 13px; margin-top: -4px;' },
+        'Blad: ' + parsed.sheetName + ' · ' + parsed.orders.length + ' orders · weken ' + (parsed.weeksFound.length ? ('W' + parsed.weeksFound[0] + '\u2013W' + parsed.weeksFound[parsed.weeksFound.length - 1]) : '\u2014')));
+
+      const totalWerkbonnen = parsed.orders.reduce((a, o) => a + o.parts.length, 0);
+      const totalWeeks = parsed.orders.reduce((a, o) => a + o.parts.reduce((b, p) => b + p.weeks.length, 0), 0);
+      m.appendChild(el('div', { style: 'padding: 10px; background: var(--grey-50); border-radius: var(--radius); font-size: 13px; margin-bottom: 12px;' },
+        el('div', {}, '\u2022 ' + parsed.orders.length + ' orders (projecten)'),
+        el('div', {}, '\u2022 ' + totalWerkbonnen + ' werkbonnen (Order \u00d7 Part)'),
+        el('div', {}, '\u2022 ' + totalWeeks + ' gevulde weekregels')
+      ));
+
+      const list = el('div', { style: 'max-height: 260px; overflow: auto; border: 1px solid var(--grey-100); border-radius: var(--radius); padding: 8px; font-size: 12px; font-family: monospace;' });
+      parsed.orders.forEach(o => {
+        const parts = o.parts.map(p => p.partKey + '(' + p.weeks.length + 'w)').join(' ');
+        list.appendChild(el('div', {}, o.number + '  ' + parts));
+      });
+      m.appendChild(list);
+
+      m.appendChild(el('div', { style: 'padding: 10px; background: var(--teal-light); color: var(--teal-dark); border-radius: var(--radius); font-size: 12px; margin-top: 10px;' },
+        'Bestaande projecten, werkbonnen en weken worden aangevuld \u2014 foto\u2019s, notities, floorplans en bevestigde percentages blijven staan.'));
+
+      m.appendChild(el('div', { class: 'actions' },
+        el('button', { class: 'btn', onClick: closeModal }, 'Annuleer'),
+        el('button', { class: 'btn primary', onClick: () => { closeModal(); applyExcelImport(parsed); } }, 'Importeer')
+      ));
+    }
+  };
+  render();
+}
+
+// ---------- Persistence ----------
+function save() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects: state.projects, _meta: state._meta }));
+  } catch (e) {
+    console.warn('localStorage vol \u2014 foto\u2019s nemen te veel ruimte');
+  }
+  if (fileHandle) {
+    if (writeTimer) clearTimeout(writeTimer);
+    writeTimer = setTimeout(() => { writeToFile(); }, WRITE_DEBOUNCE);
+  }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.projects) state.projects = parsed.projects;
+      if (parsed._meta) state._meta = parsed._meta;
+    }
+  } catch (e) {}
+}
+
+// ---------- Helpers ----------
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag);
+  for (const k in attrs) {
+    if (k === 'onClick') e.addEventListener('click', attrs[k]);
+    else if (k === 'onChange') e.addEventListener('change', attrs[k]);
+    else if (k === 'onInput') e.addEventListener('input', attrs[k]);
+    else if (k === 'html') e.innerHTML = attrs[k];
+    else if (k === 'style' && typeof attrs[k] === 'object') Object.assign(e.style, attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const c of children.flat()) {
+    if (c == null || c === false) continue;
+    if (typeof c === 'string' || typeof c === 'number') e.appendChild(document.createTextNode(c));
+    else e.appendChild(c);
+  }
+  return e;
+}
+function toast(msg) {
+  const t = el('div', { class: 'toast' }, msg);
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
+}
+
+function getProject() { return state.projects.find(p => p.id === state.projectId); }
+function getWerkbon() { const p = getProject(); return p && p.werkbonnen.find(w => w.id === state.werkbonId); }
+function getWeek() { const w = getWerkbon(); return w && w.weeks.find(x => x.id === state.weekId); }
+
+function navigate(view, ids = {}) {
+  state.view = view;
+  if (ids.projectId !== undefined) state.projectId = ids.projectId;
+  if (ids.werkbonId !== undefined) state.werkbonId = ids.werkbonId;
+  if (ids.weekId !== undefined) state.weekId = ids.weekId;
+  render();
+}
+
+function weekStatus(week) {
+  if (!week) return 'grey';
+  if (week.confirmed_pct === null || week.confirmed_pct === undefined) {
+    if (week.ai_pct !== null && week.ai_pct !== undefined) return 'grey';
+    return 'grey';
+  }
+  const diff = week.confirmed_pct - week.streef_pct;
+  if (diff >= -10) return 'green';
+  if (diff >= -25) return 'amber';
+  return 'red';
+}
+function werkbonStatus(werkbon) {
+  if (!werkbon || !werkbon.weeks.length) return 'grey';
+  const latest = werkbon.weeks.slice().sort((a, b) => b.week - a.week)[0];
+  return weekStatus(latest);
+}
+
+async function processPhoto(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 1000;
+        const scale = Math.min(1, maxW / img.width);
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function buildAiPrompt(project, werkbon, week) {
+  return `Ik bereid het wekelijks planningsoverleg voor bij Gpi Tanks. Geef op basis van onderstaande informatie en bijgevoegde foto('s) een voorstel-voortgangspercentage.
+
+PROJECT
+- Nummer: ${project.number}
+- Klant: ${project.klant || '\u2014'}
+- Omschrijving: ${project.description || '\u2014'}
+
+WERKBON
+- Nummer: ${werkbon.number}
+- Omschrijving: ${werkbon.description}
+- Zone: ${werkbon.zone}
+- Tekening-sheet: ${werkbon.drawing_sheet || '\u2014'}
+- Context uit tekening: ${werkbon.drawing_notes || '\u2014'}
+
+WEEK W${week.week}
+- Weekdoel: ${week.weekdoel}
+- Streef-% einde week: ${week.streef_pct}%
+- Aantal foto's bijgevoegd: ${(week.photos || []).length}
+
+Geef antwoord in precies dit formaat zodat ik het in de pilot-app kan plakken:
+
+PCT: <25 | 50 | 75 | 100>
+UITLEG: <\u00e9\u00e9n zin, wat zichtbaar is in de foto tegen het weekdoel>`;
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => toast('Prompt gekopieerd'),
+    () => { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('Prompt gekopieerd'); } catch (e) { alert(text); } ta.remove(); });
+}
+
+// ---------- Render root ----------
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  app.appendChild(renderTop());
+  const meta = renderSyncMeta();
+  if (meta) app.appendChild(meta);
+  app.appendChild(renderCrumbs());
+  const main = el('div', { class: 'main' });
+  switch (state.view) {
+    case 'home': renderHome(main); break;
+    case 'project': renderProject(main); break;
+    case 'werkbon': renderWerkbon(main); break;
+    case 'week': renderWeek(main); break;
+  }
+  app.appendChild(main);
+  if (state.modal) app.appendChild(renderModal());
+}
+
+function renderTop() {
+  let syncWidget;
+  if (syncStatus === 'ok') {
+    syncWidget = el('div', { class: 'sync-status ok', onClick: showSettingsModal, title: 'Gedeeld bestand actief' },
+      el('span', { class: 'dot green' }),
+      'Gedeeld actief'
+    );
+  } else if (syncStatus === 'warn') {
+    syncWidget = el('div', { class: 'sync-status warn', onClick: reactivateHandle, title: 'Klik om te heractiveren' },
+      el('span', { class: 'dot amber' }),
+      'Klik om te heractiveren'
+    );
+  } else {
+    syncWidget = el('div', { class: 'sync-status off', onClick: showSettingsModal, title: 'Lokaal \u2014 klik om te koppelen' },
+      el('span', { class: 'dot grey' }),
+      'Lokaal'
+    );
+  }
+  const cw = getCurrentWeek();
+  return el('div', { class: 'top' },
+    el('h1', {},
+      'FloorScan',
+      el('span', { class: 'tag' }, 'pilot v2.3 \u2014 Gpi Tanks')
+    ),
+    el('div', { class: 'top-actions' },
+      el('div', { class: 'week-pill', onClick: () => navigate('home'), title: 'Huidige week \u2014 ga naar overzicht', style: 'cursor: pointer;' },
+        'Deze week: W' + cw
+      ),
+      syncWidget,
+      el('button', { class: 'btn sm ghost', onClick: showSettingsModal }, 'Instellingen')
+    )
+  );
+}
+
+function renderSyncMeta() {
+  if (!state._meta || !state._meta.lastModifiedAt) return null;
+  const d = new Date(state._meta.lastModifiedAt);
+  const txt = 'Laatst gewijzigd door ' + (state._meta.lastModifiedBy || 'onbekend') + ' op ' + d.toLocaleString('nl-NL', { dateStyle: 'short', timeStyle: 'short' });
+  return el('div', { class: 'sync-meta' }, txt);
+}
+
+function renderCrumbs() {
+  const crumbs = el('div', { class: 'crumbs' });
+  crumbs.appendChild(el('a', { onClick: () => navigate('home') }, 'Projecten'));
+  const p = getProject();
+  if (p) {
+    crumbs.appendChild(el('span', { class: 'sep' }, '/'));
+    crumbs.appendChild(el('a', { onClick: () => navigate('project', { projectId: p.id }) }, p.number + ' \u2014 ' + (p.klant || 'project')));
+    const w = getWerkbon();
+    if (w) {
+      crumbs.appendChild(el('span', { class: 'sep' }, '/'));
+      crumbs.appendChild(el('a', { onClick: () => navigate('werkbon', { werkbonId: w.id }) }, 'Werkbon ' + w.number));
+      const week = getWeek();
+      if (week) {
+        crumbs.appendChild(el('span', { class: 'sep' }, '/'));
+        crumbs.appendChild(el('span', {}, 'W' + week.week));
+      }
+    }
+  }
+  return crumbs;
+}
+
+// Banner voor huidige week + snel-acties
+function renderCurrentWeekBanner() {
+  const cw = getCurrentWeek();
+  const yr = getCurrentWeekYear();
+  const dateRange = getWeekDateRange(cw, yr);
+
+  // Tel lopende werkbonnen met een record voor deze week
+  let werkbonsThisWeek = 0, werkbonsBevestigd = 0;
+  state.projects.forEach(p => (p.werkbonnen || []).forEach(w => {
+    const wk = (w.weeks || []).find(x => x.week === cw);
+    if (wk) {
+      werkbonsThisWeek++;
+      if (wk.confirmed_pct != null) werkbonsBevestigd++;
+    }
+  }));
+
+  const banner = el('div', { class: 'cw-banner' });
+  banner.appendChild(el('div', {},
+    el('h3', {}, 'Huidige week'),
+    el('div', { class: 'cw-num' }, 'W' + cw + ' \u00b7 ' + yr),
+    el('div', { class: 'cw-dates' }, dateRange +
+      (werkbonsThisWeek ? ' \u00b7 ' + werkbonsBevestigd + '/' + werkbonsThisWeek + ' bevestigd' : ' \u00b7 geen werkbon-regels'))
+  ));
+  const actions = el('div', { class: 'cw-actions' });
+  actions.appendChild(el('button', { class: 'btn primary', onClick: startQrScanFlow, title: 'Scan QR-code op de tank' },
+    '\ud83d\udcf7 Scan QR-code'
+  ));
+  if (werkbonsThisWeek) {
+    actions.appendChild(el('button', { class: 'btn', onClick: () => showCurrentWeekListModal(cw) }, '\u2022 Lijst deze week'));
+  }
+  banner.appendChild(actions);
+  return banner;
+}
+
+function showCurrentWeekListModal(cw) {
+  const items = [];
+  state.projects.forEach(p => (p.werkbonnen || []).forEach(w => {
+    const wk = (w.weeks || []).find(x => x.week === cw);
+    if (wk) items.push({ project: p, werkbon: w, week: wk });
+  }));
+  state.modal = {
+    render: m => {
+      m.appendChild(el('h3', {}, 'Werkbonnen deze week (W' + cw + ')'));
+      if (!items.length) {
+        m.appendChild(el('p', { style: 'color: var(--grey-500);' }, 'Geen werkbon-regels voor deze week.'));
+      } else {
+        items.forEach(({ project, werkbon, week }) => {
+          const st = weekStatus(week);
+          const row = el('div', { class: 'card', style: 'margin-bottom: 6px; padding: 10px 12px;' },
+            el('div', { class: 'card-row', onClick: () => { closeModal(); navigate('week', { projectId: project.id, werkbonId: werkbon.id, weekId: week.id }); } },
+              el('div', {},
+                el('div', { class: 'card-title', style: 'font-size: 14px;' }, project.number + ' \u00b7 ' + werkbon.number),
+                el('div', { class: 'card-sub', style: 'font-size: 12px;' }, werkbon.description + ' \u00b7 ' + (week.weekdoel || '\u2014') + ' \u00b7 ' + (week.confirmed_pct != null ? week.confirmed_pct + '%' : 'nog niet bevestigd'))
+              ),
+              el('span', { class: 'dot ' + st })
+            )
+          );
+          m.appendChild(row);
+        });
+      }
+      m.appendChild(el('div', { class: 'actions' },
+        el('button', { class: 'btn primary', onClick: closeModal }, 'Sluiten')
+      ));
+    }
+  };
+  render();
+}
+
+// ---------- View: Home ----------
+function renderHome(main) {
+  main.appendChild(renderCurrentWeekBanner());
+  main.appendChild(el('h2', {}, 'Projecten'));
+  if (!state.projects.length) {
+    main.appendChild(el('div', { class: 'empty' },
+      el('p', {}, 'Nog geen projecten. Voeg een project toe of koppel de Productionplans Lopik.xlsx om ze automatisch in te laden.'),
+      el('p', {}, el('button', { class: 'btn primary lg', onClick: showProjectModal }, '+ Nieuw project'))
+    ));
+    const empty = el('div', { style: 'margin-top: 8px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;' });
+    empty.appendChild(el('button', { class: 'btn', onClick: importExcelViaPlainInput }, '\ud83d\udcc2 Upload Excel-bouwplan'));
+    empty.appendChild(el('button', { class: 'btn ghost', onClick: () => loadDataFromFile(false) }, '\u2b06 Upload JSON-data'));
+    main.appendChild(empty);
+    return;
+  }
+  state.projects.forEach(p => {
+    const werkbonStatuses = p.werkbonnen.map(werkbonStatus);
+    const worstStatus = werkbonStatuses.includes('red') ? 'red'
+      : werkbonStatuses.includes('amber') ? 'amber'
+      : werkbonStatuses.includes('green') ? 'green' : 'grey';
+    const completedFlag = p.completed_per_buildingplan;
+    const subDiv = el('div', { class: 'card-sub' });
+    subDiv.appendChild(document.createTextNode((p.description || '') + ' \u00b7 ' + p.werkbonnen.length + ' werkbonnen'));
+    if (completedFlag) {
+      subDiv.appendChild(el('div', { style: 'margin-top: 4px; color: var(--green); font-weight: 600;' }, '\u2713 Project should be completed according buildingplan'));
+    }
+    main.appendChild(el('div', { class: 'card' + (completedFlag ? ' current-week' : '') },
+      el('div', { class: 'card-row', onClick: () => navigate('project', { projectId: p.id }) },
+        el('div', {},
+          el('div', { class: 'card-title' }, p.number + ' \u2014 ' + (p.klant || '')),
+          subDiv
+        ),
+        el('span', { class: 'dot ' + worstStatus })
+      )
+    ));
+  });
+  const homeActions = el('div', { style: 'margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;' });
+  homeActions.appendChild(el('button', { class: 'btn primary', onClick: showProjectModal }, '+ Nieuw project'));
+  homeActions.appendChild(el('button', { class: 'btn', onClick: importExcelViaPlainInput }, '\ud83d\udcc2 Upload Excel-bouwplan'));
+  if (excelHandle) {
+    homeActions.appendChild(el('button', { class: 'btn ghost', onClick: () => importFromExcel({ autoConfirm: false }) }, '\u27f3 Ververs uit live Excel'));
+  } else if (excelPendingHandle) {
+    homeActions.appendChild(el('button', { class: 'btn ghost', onClick: async () => { const ok = await reactivateExcelHandle(); if (ok) await importFromExcel(); } }, '\u27f3 Heractiveer Excel'));
+  }
+  main.appendChild(homeActions);
+}
+
+// ---------- View: Project ----------
+function renderProject(main) {
+  const p = getProject();
+  if (!p) return navigate('home');
+  main.appendChild(el('h2', {}, p.number + ' \u2014 ' + (p.klant || '')));
+  if (p.description) main.appendChild(el('p', { style: 'color: var(--grey-500); margin-top: -10px;' }, p.description));
+  if (p.completed_per_buildingplan) {
+    main.appendChild(el('div', { class: 'status-banner green', style: 'margin-bottom: 16px;' },
+      '\u2713 Project should be completed according buildingplan \u2014 geen taken meer in week ' + (p.last_excel_check_week || getCurrentWeek()) + ' of later.'
+    ));
+  }
+
+  main.appendChild(el('h3', {}, 'Werkbonnen'));
+  if (!p.werkbonnen.length) {
+    main.appendChild(el('div', { class: 'empty' },
+      el('p', {}, 'Geen werkbonnen. Voeg er een toe of gebruik het standaard-template (100 / 300 / 400).'),
+      el('p', {},
+        el('button', { class: 'btn primary', onClick: addDefaultWerkbonnen }, 'Voeg standaard-werkbonnen toe'),
+        ' ',
+        el('button', { class: 'btn', onClick: showWerkbonModal }, '+ Losse werkbon')
+      )
+    ));
+  } else {
+    p.werkbonnen.forEach(w => {
+      const st = werkbonStatus(w);
+      const latest = w.weeks.slice().sort((a, b) => b.week - a.week)[0];
+      main.appendChild(el('div', { class: 'card' },
+        el('div', { class: 'card-row', onClick: () => navigate('werkbon', { werkbonId: w.id }) },
+          el('div', {},
+            el('div', { class: 'card-title' }, w.number + ' \u2014 ' + w.description),
+            el('div', { class: 'card-sub' }, w.zone + ' \u00b7 ' + w.weeks.length + ' weken' + (latest ? ' \u00b7 W' + latest.week + ': ' + (latest.confirmed_pct ?? '\u2014') + '%' : ''))
+          ),
+          el('span', { class: 'dot ' + st })
+        )
+      ));
+    });
+    main.appendChild(el('div', { style: 'margin-top: 16px;' },
+      el('button', { class: 'btn', onClick: showWerkbonModal }, '+ Werkbon toevoegen')
+    ));
+  }
+
+  main.appendChild(el('div', { style: 'margin-top: 30px; padding-top: 16px; border-top: 1px solid var(--grey-100); display: flex; gap: 8px;' },
+    el('button', { class: 'btn sm ghost danger', onClick: () => { if (confirm('Project verwijderen?')) { state.projects = state.projects.filter(x => x.id !== p.id); save(); navigate('home'); } } }, 'Project verwijderen')
+  ));
+}
+
+// ---------- View: Werkbon ----------
+function renderWerkbon(main) {
+  const w = getWerkbon();
+  const p = getProject();
+  if (!w) return navigate('home');
+  const cw = getCurrentWeek();
+
+  main.appendChild(el('h2', {}, 'Werkbon ' + w.number + ' \u2014 ' + w.description));
+  main.appendChild(el('dl', { class: 'meta' },
+    el('dt', {}, 'Zone'), el('dd', {}, w.zone),
+    el('dt', {}, 'Tekening-sheet'), el('dd', {}, w.drawing_sheet || '\u2014'),
+    el('dt', {}, 'Tekening-context'), el('dd', {}, w.drawing_notes || '\u2014')
+  ));
+
+  // Quick-actions: huidige week + QR-sticker
+  const quick = el('div', { style: 'display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;' });
+  const currentWeekObj = (w.weeks || []).find(x => x.week === cw);
+  if (currentWeekObj) {
+    quick.appendChild(el('button', { class: 'btn primary', onClick: () => navigate('week', { weekId: currentWeekObj.id }) },
+      '\u2192 Open W' + cw + ' (deze week)'));
+  } else {
+    quick.appendChild(el('button', { class: 'btn primary', onClick: () => createCurrentWeekAndOpen(w) },
+      '+ Maak W' + cw + ' (deze week)'));
+  }
+  quick.appendChild(el('button', { class: 'btn', onClick: () => showQrCodeForWerkbon(p, w) },
+    '\ud83d\udd33 Toon QR-code'));
+  main.appendChild(quick);
+
+  main.appendChild(el('h3', {}, 'Weken'));
+  if (!w.weeks.length) {
+    main.appendChild(el('div', { class: 'empty' },
+      el('p', {}, 'Nog geen week-registraties voor deze werkbon.'),
+      el('p', {}, el('button', { class: 'btn primary', onClick: showWeekModal }, '+ Week toevoegen'))
+    ));
+  } else {
+    w.weeks.slice().sort((a, b) => b.week - a.week).forEach(week => {
+      const st = weekStatus(week);
+      const isCurrent = week.week === cw;
+      const cardClass = 'card' + (isCurrent ? ' current-week' : '');
+      main.appendChild(el('div', { class: cardClass },
+        el('div', { class: 'card-row', onClick: () => navigate('week', { weekId: week.id }) },
+          el('div', {},
+            el('div', { class: 'card-title' }, 'W' + week.week + (isCurrent ? '  \u2014 deze week' : '') + ' \u2014 streef ' + week.streef_pct + '%' + (week.uurSummary ? ' \u00b7 ' + week.uurSummary : '')),
+            el('div', { class: 'card-sub' }, (week.weekdoel || '\u2014') + ' \u00b7 bevestigd: ' + (week.confirmed_pct ?? '\u2014') + '%')
+          ),
+          el('span', { class: 'dot ' + st })
+        )
+      ));
+    });
+    main.appendChild(el('div', { style: 'margin-top: 16px;' },
+      el('button', { class: 'btn', onClick: showWeekModal }, '+ Week toevoegen')
+    ));
+  }
+}
+
+function createCurrentWeekAndOpen(werkbon) {
+  const cw = getCurrentWeek();
+  const id = uid();
+  werkbon.weeks = werkbon.weeks || [];
+  werkbon.weeks.push({ id, week: cw, weekdoel: '', streef_pct: 50, photos: [], ai_pct: null, ai_toelichting: '', confirmed_pct: null, remark: '' });
+  save(); navigate('week', { weekId: id });
+}
+
+// ---------- View: Week (overleg-view) ----------
+function renderWeek(main) {
+  const project = getProject();
+  const werkbon = getWerkbon();
+  const week = getWeek();
+  if (!week) return navigate('home');
+
+  const st = weekStatus(week);
+  const stLabel = { green: 'Op schema', amber: 'Achter op schema', red: 'Ruim achter', grey: 'Nog geen % bevestigd' }[st];
+  const cw = getCurrentWeek();
+  const isCurrent = week.week === cw;
+  const headerRow = el('div', { style: 'display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;' });
+  headerRow.appendChild(el('h2', { style: 'margin: 0;' }, project.number + ' \u00b7 Werkbon ' + werkbon.number + ' \u00b7 W' + week.week));
+  if (isCurrent) {
+    headerRow.appendChild(el('span', { class: 'week-pill' }, '\u2605 Huidige week'));
+  } else if (week.week < cw) {
+    headerRow.appendChild(el('span', { class: 'week-pill grey' }, 'Eerdere week'));
+  } else {
+    headerRow.appendChild(el('span', { class: 'week-pill amber' }, 'Toekomstige week'));
+  }
+  main.appendChild(headerRow);
+  main.appendChild(el('div', { class: 'status-banner ' + st }, stLabel + (week.confirmed_pct != null ? ' \u2014 bevestigd ' + week.confirmed_pct + '% (streef ' + week.streef_pct + '%)' : '')));
+
+  const panels = el('div', { class: 'panels' });
+
+  const pTekening = el('div', { class: 'panel' });
+  pTekening.appendChild(el('div', { class: 'panel-label' }, 'Tekening'));
+  pTekening.appendChild(el('div', { class: 'panel-sub' }, werkbon.drawing_sheet ? 'Sheet ' + werkbon.drawing_sheet : 'geen sheet'));
+  pTekening.appendChild(el('div', { style: 'font-size: 13px; line-height: 1.6; color: var(--grey-700); padding: 12px; background: var(--grey-50); border-radius: var(--radius);' }, werkbon.drawing_notes || 'Geen tekening-context ingevuld. Vul dit bij de werkbon in (bijv. \u201C4 rompen, 9 nozzles, 4 in werkbon 10400\u201D).'));
+  panels.appendChild(pTekening);
+
+  const pDoel = el('div', { class: 'panel' });
+  pDoel.appendChild(el('div', { class: 'panel-label' }, 'Weekdoel \u00b7 W' + week.week));
+  pDoel.appendChild(el('div', { class: 'panel-sub' }, 'streef ' + week.streef_pct + '%'));
+  // Weekdoel als afvinkbare checklist — leesbaar op werkvloer
+  const taskList = (week.tasks && week.tasks.length) ? week.tasks
+                 : (week.weekdoel ? week.weekdoel.split(/\s*·\s*|\n+/).map(s => s.trim()).filter(Boolean) : []);
+  if (!week.tasks_done) week.tasks_done = {};
+  if (taskList.length === 0) {
+    pDoel.appendChild(el('div', { style: 'font-size: 15px; margin-bottom: 12px; color: var(--grey-500); font-style: italic;' }, '(geen weekdoel ingevuld)'));
+  } else {
+    const checklist = el('div', { class: 'task-checklist' });
+    taskList.forEach((taskText, idx) => {
+      const id = 'task-' + week.id + '-' + idx;
+      const isDone = !!week.tasks_done[taskText];
+      const row = el('label', { class: 'task-row' + (isDone ? ' done' : ''), htmlFor: id });
+      const cb = el('input', { type: 'checkbox', id: id, onChange: e => {
+        if (e.target.checked) week.tasks_done[taskText] = new Date().toISOString();
+        else delete week.tasks_done[taskText];
+        const allDone = taskList.every(t => week.tasks_done[t]);
+        if (allDone && week.confirmed_pct == null) week.confirmed_pct = 100;
+        save(); render();
+      } });
+      if (isDone) cb.setAttribute('checked', '');
+      row.appendChild(cb);
+      row.appendChild(el('span', { class: 'task-text' }, taskText));
+      checklist.appendChild(row);
+    });
+    pDoel.appendChild(checklist);
+    const doneCount = taskList.filter(t => week.tasks_done[t]).length;
+    pDoel.appendChild(el('div', { style: 'font-size: 12px; color: var(--grey-500); margin-bottom: 10px; text-align: right;' }, doneCount + '/' + taskList.length + ' afgevinkt'));
+  }
+  if (week.uurSummary) {
+    pDoel.appendChild(el('div', { style: 'font-size: 12px; color: var(--grey-500); margin-bottom: 10px; font-family: monospace;' }, 'Uit Excel: ' + week.uurSummary + (week.excel_status ? ' \u00b7 status 1' : '')));
+  }
+  pDoel.appendChild(el('div', { class: 'progress' }, el('div', { class: 'progress-fill', style: 'width: ' + week.streef_pct + '%' })));
+
+  if (week.ai_pct != null) {
+    pDoel.appendChild(el('div', { class: 'ai-box' },
+      el('div', { class: 'lbl' }, 'AI-voorstel'),
+      el('div', { class: 'val' }, '\u00b1' + week.ai_pct + '%'),
+      el('div', { class: 'text' }, week.ai_toelichting || '\u2014')
+    ));
+  } else {
+    pDoel.appendChild(el('div', { class: 'ai-box empty' },
+      el('div', { class: 'lbl' }, 'AI-voorstel'),
+      el('div', { class: 'val' }, 'Nog niet ingevuld'),
+      el('div', { class: 'text' }, 'Gebruik de knop rechts om een prompt te genereren en plak Claude\u2019s antwoord met \u201CAI-antwoord invoeren\u201D.')
+    ));
+  }
+
+  pDoel.appendChild(el('div', { style: 'font-size: 12px; color: var(--grey-500); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 500;' }, 'Bevestig voortgang'));
+  const pctGrid = el('div', { class: 'pct-grid' });
+  [25, 50, 75, 100].forEach(pct => {
+    const classes = ['pct-btn'];
+    if (week.confirmed_pct === pct) classes.push('active');
+    else if (week.confirmed_pct == null && week.ai_pct != null && pct === closestPct(week.ai_pct)) classes.push('ai-suggested');
+    pctGrid.appendChild(el('button', {
+      class: classes.join(' '),
+      onClick: () => { week.confirmed_pct = pct; week.confirmed_at = new Date().toISOString(); save(); render(); }
+    }, pct + '%'));
+  });
+  pDoel.appendChild(pctGrid);
+
+  if (week.confirmed_pct != null) {
+    pDoel.appendChild(el('div', { style: 'margin-top: 8px; font-size: 12px; color: var(--grey-500);' },
+      'Bevestigd: ' + week.confirmed_pct + '% \u00b7 ',
+      el('button', { class: 'btn sm ghost', onClick: () => { week.confirmed_pct = null; save(); render(); } }, 'wijzigen')
+    ));
+  }
+
+  pDoel.appendChild(el('div', { class: 'field', style: 'margin-top: 16px;' },
+    el('label', {}, 'Opmerking'),
+    el('textarea', {
+      placeholder: 'Bijv. wacht op levering flens N04',
+      onInput: e => { week.remark = e.target.value; save(); }
+    }, week.remark || '')
+  ));
+  panels.appendChild(pDoel);
+
+  const pFotos = el('div', { class: 'panel' });
+  pFotos.appendChild(el('div', { class: 'panel-label' }, 'Foto\u2019s werkvloer'));
+  pFotos.appendChild(el('div', { class: 'panel-sub' }, (week.photos || []).length + ' foto\u2019s'));
+
+  // Speciaal: drie zijden-foto's (voor / zijde / achter) \u2014 gevuld via QR-flow of camera
+  if (!week.sides) week.sides = { voor: null, zijde: null, achter: null };
+  const sideRow = el('div', { class: 'photo-side-row' });
+  ['voor', 'zijde', 'achter'].forEach(key => {
+    const cell = el('div', { class: 'photo-side' + (week.sides[key] ? '' : ' empty') });
+    if (week.sides[key]) {
+      cell.appendChild(el('img', { src: week.sides[key], onClick: () => { week.photos = week.photos || []; week.photos.unshift(week.sides[key]); save(); render(); } }));
+      cell.appendChild(el('span', { class: 'side-label' }, key));
+    } else {
+      cell.appendChild(el('span', {}, key.toUpperCase() + '\nnog geen foto'));
+    }
+    cell.addEventListener('click', () => captureSidePhoto(week, key));
+    sideRow.appendChild(cell);
+  });
+  pFotos.appendChild(sideRow);
+  pFotos.appendChild(el('div', { style: 'display: flex; gap: 6px; margin-bottom: 12px;' },
+    el('button', { class: 'btn primary', style: 'flex: 1;', onClick: () => start3SidePhotoFlow(week) }, '\ud83d\udcf7 Maak 3 foto\u2019s (voor \u00b7 zijde \u00b7 achter)')
+  ));
+
+  if ((week.photos || []).length > 0) {
+    pFotos.appendChild(el('div', { class: 'photo-hero' }, el('img', { src: week.photos[0] })));
+    const grid = el('div', { class: 'photos' });
+    (week.photos || []).forEach((p, i) => {
+      const thumb = el('div', { class: 'photo-thumb' });
+      thumb.appendChild(el('img', { src: p, onClick: () => { week.photos.splice(i, 1); week.photos.unshift(p); save(); render(); } }));
+      thumb.appendChild(el('button', { class: 'del', onClick: () => { if (confirm('Foto verwijderen?')) { week.photos.splice(i, 1); save(); render(); } } }, '\u00d7'));
+      grid.appendChild(thumb);
+    });
+    pFotos.appendChild(grid);
+  }
+
+  const extraRow = el('div', { style: 'display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;' });
+  extraRow.appendChild(el('button', { class: 'btn', style: 'flex: 1; min-height: 44px;', onClick: () => {
+    const cb = dataUrl => { if (!week.photos) week.photos = []; week.photos.push(dataUrl); save(); render(); };
+    if (cameraAvailable()) openInAppCameraModal(cb);
+    else triggerNativeCameraInput(cb);
+  } }, '\ud83d\udcf7 Foto maken'));
+  const upload = el('label', { class: 'btn', style: 'flex: 1; min-height: 44px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;' },
+    '\ud83d\uddbc Bestaande foto kiezen',
+    el('input', { type: 'file', accept: 'image/*', multiple: '', style: 'display: none;', onChange: async e => {
+      const files = Array.from(e.target.files);
+      for (const f of files) {
+        const dataUrl = await processPhoto(f);
+        if (!week.photos) week.photos = [];
+        week.photos.push(dataUrl);
+      }
+      save(); render();
+    } })
+  );
+  extraRow.appendChild(upload);
+  pFotos.appendChild(extraRow);
+
+  pFotos.appendChild(el('div', { style: 'margin-top: 14px; display: flex; flex-direction: column; gap: 6px;' },
+    el('button', { class: 'btn primary', onClick: () => { copyToClipboard(buildAiPrompt(project, werkbon, week)); } }, 'Kopieer AI-prompt'),
+    el('button', { class: 'btn', onClick: () => showAiInputModal(week) }, 'AI-antwoord invoeren')
+  ));
+  panels.appendChild(pFotos);
+
+  main.appendChild(panels);
+
+  main.appendChild(el('div', { style: 'margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--grey-100); display: flex; gap: 8px; flex-wrap: wrap;' },
+    el('button', { class: 'btn', onClick: () => showWeekEditModal(week) }, 'Weekdoel / streef bewerken'),
+    el('button', { class: 'btn sm ghost danger', onClick: () => {
+      if (confirm('Week W' + week.week + ' verwijderen?')) {
+        werkbon.weeks = werkbon.weeks.filter(x => x.id !== week.id);
+        save(); navigate('werkbon', { weekId: null });
+      }
+    } }, 'Week verwijderen')
+  ));
+}
+
+function closestPct(val) {
+  return [25, 50, 75, 100].reduce((best, p) => Math.abs(p - val) < Math.abs(best - val) ? p : best, 25);
+}
+
+// ---------- Modals ----------
+function renderModal() {
+  const bg = el('div', { class: 'modal-bg', onClick: e => { if (e.target === bg) closeModal(); } });
+  const m = el('div', { class: 'modal' });
+  state.modal.render(m);
+  bg.appendChild(m);
+  return bg;
+}
+function closeModal() {
+  if (state.modal && typeof state.modal.onClose === 'function') {
+    try { state.modal.onClose(); } catch (e) {}
+  }
+  state.modal = null; render();
+}
+
+function showProjectModal() {
+  let nr = '', klant = '', desc = '';
+  state.modal = {
+    render: m => {
+      m.appendChild(el('h3', {}, 'Nieuw project'));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Projectnummer *'),
+        el('input', { placeholder: 'bv. 326022', onInput: e => nr = e.target.value.trim() })));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Klant'),
+        el('input', { placeholder: 'bv. B&V Techniek', onInput: e => klant = e.target.value.trim() })));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Omschrijving'),
+        el('input', { placeholder: 'bv. Opslagtank 35 m\u00b3 \u00d82800', onInput: e => desc = e.target.value.trim() })));
+      m.appendChild(el('div', { class: 'actions' },
+        el('button', { class: 'btn', onClick: closeModal }, 'Annuleer'),
+        el('button', { class: 'btn primary', onClick: () => {
+          if (!nr) return alert('Projectnummer verplicht');
+          const id = uid();
+          state.projects.push({ id, number: nr, klant, description: desc, werkbonnen: [] });
+          save(); closeModal(); navigate('project', { projectId: id });
+        } }, 'Aanmaken')
+      ));
+    }
+  };
+  render();
+}
+
+function addDefaultWerkbonnen() {
+  const p = getProject();
+  const defaults = [
+    { number: '10100', description: 'Top assembly', zone: 'Hal M', drawing_sheet: '-100' },
+    { number: '10300', description: 'Bottom assembly', zone: 'Hal M', drawing_sheet: '-300' },
+    { number: '10400', description: 'Final assembly', zone: 'Hal L', drawing_sheet: '-400' },
+  ];
+  defaults.forEach(d => p.werkbonnen.push({ id: uid(), ...d, drawing_notes: '', weeks: [] }));
+  save(); render();
+}
+
+function showWerkbonModal() {
+  let nr = '', desc = '', zone = 'Hal L', sheet = '', notes = '';
+  state.modal = {
+    render: m => {
+      m.appendChild(el('h3', {}, 'Werkbon toevoegen'));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Werkbonnummer *'),
+        el('input', { placeholder: 'bv. 10400', onInput: e => nr = e.target.value.trim() })));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Omschrijving'),
+        el('input', { placeholder: 'bv. Final assembly', onInput: e => desc = e.target.value.trim() })));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Zone'),
+        (() => {
+          const s = el('select', { onChange: e => zone = e.target.value });
+          ['TB', 'Hal M', 'Hal L', 'ISO', 'PREP'].forEach(z => {
+            const o = el('option', { value: z }, z);
+            if (z === zone) o.setAttribute('selected', '');
+            s.appendChild(o);
+          });
+          return s;
+        })()));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Tekening-sheet'),
+        el('input', { placeholder: 'bv. -400', onInput: e => sheet = e.target.value.trim() })));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Tekening-context'),
+        el('textarea', { placeholder: 'bv. 4 rompen, 9 nozzles, 4 in werkbon', onInput: e => notes = e.target.value })));
+      m.appendChild(el('div', { class: 'actions' },
+        el('button', { class: 'btn', onClick: closeModal }, 'Annuleer'),
+        el('button', { class: 'btn primary', onClick: () => {
+          if (!nr) return alert('Nummer verplicht');
+          const p = getProject();
+          const id = uid();
+          p.werkbonnen.push({ id, number: nr, description: desc, zone, drawing_sheet: sheet, drawing_notes: notes, weeks: [] });
+          save(); closeModal(); render();
+        } }, 'Aanmaken')
+      ));
+    }
+  };
+  render();
+}
+
+function showWeekModal() {
+  let weekNr = getCurrentWeek(), doel = '', streef = 50;
+  state.modal = {
+    render: m => {
+      m.appendChild(el('h3', {}, 'Week toevoegen'));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Weeknummer'),
+        el('input', { type: 'number', value: weekNr, onInput: e => weekNr = parseInt(e.target.value) || weekNr })));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Weekdoel'),
+        el('textarea', { placeholder: 'bv. Afronden romp 3, starten N04', onInput: e => doel = e.target.value })));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Streef-% einde week'),
+        (() => {
+          const s = el('select', { onChange: e => streef = parseInt(e.target.value) });
+          [25, 50, 75, 100].forEach(p => {
+            const o = el('option', { value: p }, p + '%');
+            if (p === streef) o.setAttribute('selected', '');
+            s.appendChild(o);
+          });
+          return s;
+        })()));
+      m.appendChild(el('div', { class: 'actions' },
+        el('button', { class: 'btn', onClick: closeModal }, 'Annuleer'),
+        el('button', { class: 'btn primary', onClick: () => {
+          const w = getWerkbon();
+          const id = uid();
+          w.weeks.push({ id, week: weekNr, weekdoel: doel, streef_pct: streef, photos: [], ai_pct: null, ai_toelichting: '', confirmed_pct: null, remark: '' });
+          save(); closeModal(); navigate('week', { weekId: id });
+        } }, 'Aanmaken')
+      ));
+    }
+  };
+  render();
+}
+
+function showWeekEditModal(week) {
+  let doel = week.weekdoel, streef = week.streef_pct, weekNr = week.week;
+  state.modal = {
+    render: m => {
+      m.appendChild(el('h3', {}, 'Week bewerken'));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Weeknummer'),
+        el('input', { type: 'number', value: weekNr, onInput: e => weekNr = parseInt(e.target.value) || weekNr })));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Weekdoel'),
+        el('textarea', { onInput: e => doel = e.target.value }, doel || '')));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Streef-%'),
+        (() => {
+          const s = el('select', { onChange: e => streef = parseInt(e.target.value) });
+          [25, 50, 75, 100].forEach(p => {
+            const o = el('option', { value: p }, p + '%');
+            if (p === streef) o.setAttribute('selected', '');
+            s.appendChild(o);
+          });
+          return s;
+        })()));
+      m.appendChild(el('div', { class: 'actions' },
+        el('button', { class: 'btn', onClick: closeModal }, 'Annuleer'),
+        el('button', { class: 'btn primary', onClick: () => {
+          week.week = weekNr; week.weekdoel = doel; week.streef_pct = streef;
+          save(); closeModal(); render();
+        } }, 'Opslaan')
+      ));
+    }
+  };
+  render();
+}
+
+function showAiInputModal(week) {
+  let txt = '';
+  state.modal = {
+    render: m => {
+      m.appendChild(el('h3', {}, 'AI-antwoord invoeren'));
+      m.appendChild(el('p', { style: 'color: var(--grey-500); font-size: 13px;' }, 'Plak hier het antwoord van Claude. De app leest automatisch de regels \u201CPCT:\u201D en \u201CUITLEG:\u201D.'));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Antwoord'),
+        el('textarea', { rows: 8, placeholder: 'PCT: 50\nUITLEG: 3 rompen zichtbaar gelast, N04 nog niet aangebouwd', onInput: e => txt = e.target.value })));
+      m.appendChild(el('div', { style: 'padding: 10px; background: var(--grey-50); border-radius: var(--radius); font-size: 12px; color: var(--grey-500); margin-bottom: 8px;' }, 'Of vul handmatig in \u2014 zie velden hieronder.'));
+      let manualPct = week.ai_pct || null, manualTxt = week.ai_toelichting || '';
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Voorstel-%'),
+        (() => {
+          const s = el('select', { onChange: e => manualPct = parseInt(e.target.value) });
+          s.appendChild(el('option', { value: '' }, '-- kies --'));
+          [25, 50, 75, 100].forEach(p => {
+            const o = el('option', { value: p }, p + '%');
+            if (p === manualPct) o.setAttribute('selected', '');
+            s.appendChild(o);
+          });
+          return s;
+        })()));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Toelichting'),
+        el('textarea', { onInput: e => manualTxt = e.target.value }, manualTxt)));
+      m.appendChild(el('div', { class: 'actions' },
+        el('button', { class: 'btn', onClick: closeModal }, 'Annuleer'),
+        el('button', { class: 'btn primary', onClick: () => {
+          if (txt.trim()) {
+            const pctMatch = txt.match(/PCT:\s*(\d+)/i);
+            const uitMatch = txt.match(/UITLEG:\s*(.+?)(\n|$)/i);
+            if (pctMatch) week.ai_pct = parseInt(pctMatch[1]);
+            if (uitMatch) week.ai_toelichting = uitMatch[1].trim();
+          }
+          if (manualPct) week.ai_pct = manualPct;
+          if (manualTxt) week.ai_toelichting = manualTxt;
+          save(); closeModal(); render();
+        } }, 'Opslaan')
+      ));
+    }
+  };
+  render();
+}
+
+// ISO 8601 weeknummer (Europa-standaard, maandag = eerste dag)
+function getCurrentWeek(ref) {
+  const d = new Date(ref || new Date());
+  const u = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = u.getUTCDay() || 7;
+  u.setUTCDate(u.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(u.getUTCFullYear(), 0, 1));
+  return Math.ceil((((u - yearStart) / 86400000) + 1) / 7);
+}
+function getCurrentWeekYear(ref) {
+  const d = new Date(ref || new Date());
+  const u = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = u.getUTCDay() || 7;
+  u.setUTCDate(u.getUTCDate() + 4 - day);
+  return u.getUTCFullYear();
+}
+function getWeekDateRange(weekNr, year) {
+  year = year || getCurrentWeekYear();
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const mondayOfWeek1 = new Date(jan4);
+  mondayOfWeek1.setUTCDate(jan4.getUTCDate() - jan4Day + 1);
+  const monday = new Date(mondayOfWeek1);
+  monday.setUTCDate(mondayOfWeek1.getUTCDate() + (weekNr - 1) * 7);
+  const friday = new Date(monday);
+  friday.setUTCDate(monday.getUTCDate() + 4);
+  const fmt = d => d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return fmt(monday) + ' – ' + fmt(friday);
+}
+
+// ---------- Import / Export ----------
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'floorscan_export_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Export gedownload');
+}
+function triggerImport() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'application/json';
+  inp.onchange = e => {
+    const f = e.target.files[0];
+    const r = new FileReader();
+    r.onload = ev => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        if (!parsed.projects) throw new Error('Geen projects-veld');
+        if (!confirm('Huidige data vervangen door import?')) return;
+        state = Object.assign(state, parsed, { view: 'home', projectId: null, werkbonId: null, weekId: null, modal: null });
+        save(); render(); toast('Import geladen');
+      } catch (err) { alert('Import mislukt: ' + err.message); }
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+
+// ---------- QR-scan & QR-generatie ----------
+//
+// QR-payload (primair formaat): "<projectnummer>-<werkbonnummer>"
+// Voorbeeld: "325277-10300" (project 325277, suborder 10, X=3 = Bottom, UU=00 = hoofd-werkbon)
+//
+let qrScanner = null;
+
+function parseQrPayload(text) {
+  if (!text) return null;
+  const t = String(text).trim();
+  if (t.startsWith('{')) {
+    try {
+      const j = JSON.parse(t);
+      const proj = j.p || j.project || j.projectnummer;
+      const wb = j.w || j.wb || j.werkbon || j.werkbonnummer;
+      if (proj && wb) return { project: String(proj), werkbon: String(wb) };
+    } catch (e) {}
+  }
+  if (/^https?:\/\//i.test(t)) {
+    try {
+      const url = new URL(t);
+      const proj = url.searchParams.get('p') || url.searchParams.get('project');
+      const wb = url.searchParams.get('w') || url.searchParams.get('werkbon');
+      if (proj && wb) return { project: proj, werkbon: wb };
+    } catch (e) {}
+  }
+  const cleaned = t.replace(/^FS[:|\-]/i, '');
+  const parts = cleaned.split(/[|;\/\-_,\s]+/).map(s => s.trim()).filter(Boolean);
+  if (parts.length >= 2 && /^\d+$/.test(parts[0]) && /^\w+$/.test(parts[1])) {
+    return { project: parts[0], werkbon: parts[1] };
+  }
+  return null;
+}
+
+function inferPartFromWerkbonNr(wb) {
+  const s = String(wb).trim();
+  const m = s.match(/^(\d{2})(\d)(\d{2})$/);
+  if (!m) return { part: 'L', zone: 'Hal L', isPrep: false, isHead: false };
+  const X = parseInt(m[2]);
+  const UU = parseInt(m[3]);
+  const isHead = UU >= 70 && UU <= 89;
+  const isPrep = UU > 0 && !isHead;
+  if (isHead) return { part: 'TB', zone: 'TB', isPrep: false, isHead: true };
+  if (isPrep) return { part: 'PREP', zone: 'PREP', isPrep: true, isHead: false };
+  switch (X) {
+    case 1: return { part: 'M', zone: 'Hal M', desc: 'Top assembly' };
+    case 3: return { part: 'M', zone: 'Hal M', desc: 'Bottom assembly' };
+    case 4: return { part: 'L', zone: 'Hal L', desc: 'Final assembly' };
+    case 5: return { part: 'M', zone: 'Hal M', desc: 'Skirt / support' };
+    case 7: return { part: 'ISO', zone: 'ISO', desc: 'Insulation' };
+    case 9: return { part: 'L', zone: 'Hal L', desc: 'Installation equipment' };
+    default: return { part: 'L', zone: 'Hal L' };
+  }
+}
+
+function cameraAvailable() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) &&
+         (window.isSecureContext || ['localhost', '127.0.0.1'].includes(location.hostname));
+}
+
+function startQrScanFlow() {
+  if (typeof Html5Qrcode === 'undefined') {
+    alert('QR-bibliotheek niet geladen (check internetverbinding).');
+    return;
+  }
+  const camOk = cameraAvailable();
+  state.modal = {
+    onClose: stopQrScanner,
+    render: m => {
+      m.appendChild(el('h3', {}, 'Scan QR-code'));
+      if (camOk) {
+        m.appendChild(el('p', { style: 'color: var(--grey-500); font-size: 13px;' },
+          'Richt de camera op de QR-sticker (formaat ', el('code', {}, '325277-10300'), ').'));
+        const reader = el('div', { id: 'qr-reader', class: 'qr-reader' });
+        m.appendChild(reader);
+        const status = el('div', { id: 'qr-status', style: 'font-size: 13px; color: var(--grey-500); text-align: center; margin-top: 10px;' }, 'Bezig met opstarten…');
+        m.appendChild(status);
+        setTimeout(() => initQrScanner(status), 50);
+      } else {
+        m.appendChild(el('div', { style: 'padding: 12px; background: var(--amber-light); color: var(--amber-dark); border-radius: var(--radius); font-size: 13px; margin-bottom: 12px;' },
+          'Camera niet bruikbaar — open de pagina via HTTPS of localhost.'));
+        m.appendChild(el('div', { style: 'font-size: 13px; line-height: 1.6;' },
+          el('div', {}, '• ', el('b', {}, 'Foto van QR uploaden'), ' — maak een foto van de QR-code en kies hieronder.'),
+          el('div', {}, '• ', el('b', {}, 'Handmatig invoeren'), ' — typ het projectnr-werkbonnr.')
+        ));
+      }
+      m.appendChild(el('div', { class: 'actions', style: 'flex-wrap: wrap;' },
+        el('button', { class: 'btn', onClick: () => { stopQrScanner(); closeModal(); } }, 'Annuleer'),
+        el('label', { class: 'btn', style: 'cursor: pointer;' },
+          '🖼 Foto van QR uploaden',
+          el('input', { type: 'file', accept: 'image/*', style: 'display: none;', onChange: async e => {
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            await scanQrFromImageFile(f);
+          } })
+        ),
+        el('button', { class: 'btn ghost', onClick: () => { stopQrScanner(); closeModal(); promptManualQrEntry(); } }, 'Handmatig invoeren')
+      ));
+    }
+  };
+  render();
+}
+
+async function scanQrFromImageFile(file) {
+  try {
+    if (qrScanner) { try { await qrScanner.stop(); qrScanner.clear(); } catch(e){} qrScanner = null; }
+    let target = document.getElementById('qr-reader');
+    if (!target) {
+      target = document.createElement('div');
+      target.id = 'qr-reader-tmp';
+      target.style.display = 'none';
+      document.body.appendChild(target);
+    }
+    const tmpId = target.id;
+    const inst = new Html5Qrcode(tmpId);
+    const decoded = await inst.scanFile(file, false);
+    try { inst.clear(); } catch (e) {}
+    if (target.id === 'qr-reader-tmp') target.remove();
+    const parsed = parseQrPayload(decoded);
+    if (!parsed) { alert('QR-code gevonden maar onbekend formaat: ' + decoded); return; }
+    closeModal();
+    resolveQrTargetAndStartPhotos(parsed.project, parsed.werkbon);
+  } catch (e) {
+    alert('Geen QR-code gevonden in de foto: ' + (e && e.message ? e.message : e));
+  }
+}
+
+async function initQrScanner(statusEl) {
+  try {
+    qrScanner = new Html5Qrcode('qr-reader');
+    const config = { fps: 10, qrbox: { width: 240, height: 240 } };
+    await qrScanner.start(
+      { facingMode: 'environment' },
+      config,
+      decodedText => onQrDecoded(decodedText, statusEl),
+      () => {}
+    );
+    if (statusEl) statusEl.textContent = 'Camera actief — richt op QR';
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = 'Kon camera niet starten: ' + (e && e.message ? e.message : e);
+  }
+}
+
+async function stopQrScanner() {
+  if (qrScanner) {
+    try { await qrScanner.stop(); qrScanner.clear(); } catch (e) {}
+    qrScanner = null;
+  }
+}
+
+async function onQrDecoded(text, statusEl) {
+  const parsed = parseQrPayload(text);
+  if (!parsed) {
+    if (statusEl) statusEl.textContent = 'Onbekende QR-code: ' + text.slice(0, 40);
+    return;
+  }
+  await stopQrScanner();
+  closeModal();
+  resolveQrTargetAndStartPhotos(parsed.project, parsed.werkbon);
+}
+
+function promptManualQrEntry() {
+  const v = prompt('Projectnummer-Werkbonnummer (bv. 325277-10300):');
+  if (!v) return;
+  const parsed = parseQrPayload(v);
+  if (!parsed) { alert('Onbekend formaat. Verwacht: <projectnummer>-<werkbonnummer>'); return; }
+  resolveQrTargetAndStartPhotos(parsed.project, parsed.werkbon);
+}
+
+function resolveQrTargetAndStartPhotos(projectNumber, werkbonNumber) {
+  const project = state.projects.find(p => String(p.number).trim() === String(projectNumber).trim());
+  if (!project) {
+    if (!confirm('Project ' + projectNumber + ' bestaat nog niet. Aanmaken?')) return;
+    const newProj = { id: uid(), number: projectNumber, klant: '', description: '', werkbonnen: [] };
+    state.projects.push(newProj);
+    save();
+    return resolveQrTargetAndStartPhotos(projectNumber, werkbonNumber);
+  }
+  let werkbon = project.werkbonnen.find(w => String(w.number).toUpperCase() === String(werkbonNumber).toUpperCase());
+  if (!werkbon) {
+    if (!confirm('Werkbon ' + werkbonNumber + ' bestaat nog niet binnen project ' + projectNumber + '. Aanmaken?')) return;
+    const inf = inferPartFromWerkbonNr(werkbonNumber);
+    werkbon = { id: uid(), number: werkbonNumber, description: inf.desc || werkbonNumber, zone: inf.zone, drawing_sheet: '', drawing_notes: '', weeks: [] };
+    project.werkbonnen.push(werkbon);
+    save();
+  }
+  const cw = getCurrentWeek();
+  let week = werkbon.weeks.find(x => x.week === cw);
+  if (!week) {
+    week = { id: uid(), week: cw, weekdoel: '', streef_pct: 50, photos: [], ai_pct: null, ai_toelichting: '', confirmed_pct: null, remark: '', sides: { voor: null, zijde: null, achter: null } };
+    werkbon.weeks.push(week);
+    save();
+  }
+  state.projectId = project.id;
+  state.werkbonId = werkbon.id;
+  state.weekId = week.id;
+  state.view = 'week';
+  render();
+  setTimeout(() => start3SidePhotoFlow(week), 200);
+}
+
+function showQrCodeForWerkbon(project, werkbon) {
+  if (typeof QRCode === 'undefined') { alert('QR-generator niet geladen.'); return; }
+  const payload = project.number + '-' + werkbon.number;
+  state.modal = {
+    render: m => {
+      m.appendChild(el('h3', {}, 'QR-code voor werkbon ' + werkbon.number));
+      m.appendChild(el('p', { style: 'color: var(--grey-500); font-size: 13px;' }, 'Print en plak deze sticker op de tank.'));
+      const box = el('div', { class: 'qr-code-box' });
+      const target = el('div', { id: 'qr-target' });
+      box.appendChild(target);
+      box.appendChild(el('div', { class: 'cap' }, payload));
+      m.appendChild(box);
+      m.appendChild(el('div', { style: 'font-size: 12px; color: var(--grey-500); margin-top: 8px; text-align: center;' },
+        project.number + ' · ' + werkbon.number + ' — ' + werkbon.description));
+      m.appendChild(el('div', { class: 'actions' },
+        el('button', { class: 'btn', onClick: () => printQrLabel(project, werkbon, payload) }, 'Print sticker'),
+        el('button', { class: 'btn primary', onClick: closeModal }, 'Sluiten')
+      ));
+      setTimeout(() => {
+        try { new QRCode(target, { text: payload, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M }); } catch (e) { target.textContent = 'Genereren mislukt: ' + e.message; }
+      }, 30);
+    }
+  };
+  render();
+}
+
+function printQrLabel(project, werkbon, payload) {
+  const w = window.open('', '_blank', 'width=400,height=560');
+  if (!w) { alert('Pop-up geblokkeerd'); return; }
+  w.document.write('<html><head><title>QR ' + werkbon.number + '</title><script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script><style>body{font-family:sans-serif;text-align:center;padding:24px;}.meta{font-size:12px;color:#555;margin-top:14px;}</style></head><body><div id="q"></div><div class="meta"><b>' + project.number + '</b><br>Werkbon ' + werkbon.number + ' — ' + (werkbon.description || '') + '</div><script>setTimeout(function(){new QRCode(document.getElementById("q"),{text:"' + payload + '",width:240,height:240});setTimeout(function(){window.print();},200);},150);<\/script></body></html>');
+  w.document.close();
+}
+
+// Camera-capture: in-app camera met preview, fallback naar OS camera-app
+function captureSidePhoto(week, key) {
+  const cb = async dataUrl => {
+    if (!week.sides) week.sides = { voor: null, zijde: null, achter: null };
+    week.sides[key] = dataUrl;
+    save(); render();
+    toast('Foto ' + key + ' opgeslagen');
+  };
+  if (cameraAvailable()) openInAppCameraModal(cb);
+  else triggerNativeCameraInput(cb);
+}
+
+function triggerNativeCameraInput(callback) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.setAttribute('accept', 'image/*');
+  inp.setAttribute('capture', 'environment');
+  inp.style.position = 'fixed';
+  inp.style.left = '-9999px';
+  inp.onchange = async e => {
+    const f = e.target.files && e.target.files[0];
+    inp.remove();
+    if (!f) return;
+    const dataUrl = await processPhoto(f);
+    callback(dataUrl);
+  };
+  document.body.appendChild(inp);
+  inp.click();
+}
+
+function openInAppCameraModal(callback) {
+  let stream = null;
+  state.modal = {
+    onClose: () => { if (stream) stream.getTracks().forEach(t => t.stop()); },
+    render: m => {
+      m.appendChild(el('h3', {}, 'Foto maken'));
+      const wrap = el('div', { style: 'background: black; border-radius: var(--radius); overflow: hidden; aspect-ratio: 3/4; max-height: 60vh; margin-bottom: 12px;' });
+      const video = el('video', { autoplay: '', playsinline: '', muted: '', style: 'width: 100%; height: 100%; object-fit: cover; display: block;' });
+      wrap.appendChild(video);
+      m.appendChild(wrap);
+      const status = el('div', { style: 'font-size: 12px; color: var(--grey-500); text-align: center; margin-bottom: 8px;' }, 'Camera opstarten…');
+      m.appendChild(status);
+      const actions = el('div', { style: 'display: flex; gap: 8px; flex-wrap: wrap;' });
+      actions.appendChild(el('button', { class: 'btn', style: 'flex: 1;', onClick: closeModal }, 'Annuleer'));
+      const shootBtn = el('button', { class: 'btn primary lg', style: 'flex: 2;', disabled: '', onClick: () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const w = video.videoWidth || 1024, h = video.videoHeight || 768;
+          const maxW = 1200, scale = Math.min(1, maxW / w);
+          canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
+          canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+          if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+          closeModal();
+          callback(dataUrl);
+        } catch (e) { alert('Foto maken mislukt: ' + e.message); }
+      } }, '📸 Maak foto');
+      actions.appendChild(shootBtn);
+      m.appendChild(actions);
+      m.appendChild(el('div', { style: 'margin-top: 8px; text-align: center;' },
+        el('button', { class: 'btn ghost sm', onClick: () => {
+          if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+          closeModal();
+          triggerNativeCameraInput(callback);
+        } }, 'Gebruik OS camera-app')
+      ));
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+        .then(s => {
+          stream = s; video.srcObject = s; video.play().catch(() => {});
+          status.textContent = 'Klaar — richt en tik op "Maak foto"';
+          shootBtn.removeAttribute('disabled');
+        })
+        .catch(err => {
+          status.innerHTML = 'Camera niet beschikbaar (' + (err.name || err) + ') — gebruik OS camera-app.';
+        });
+    }
+  };
+  render();
+}
+
+function start3SidePhotoFlow(week) {
+  if (!week.sides) week.sides = { voor: null, zijde: null, achter: null };
+  const steps = ['voor', 'zijde', 'achter'];
+  function renderModal(currentIdx) {
+    state.modal = {
+      render: m => {
+        m.appendChild(el('h3', {}, '3 foto’s maken — W' + week.week));
+        m.appendChild(el('p', { style: 'color: var(--grey-500); font-size: 13px;' }, 'Maak een foto van elke zijde.'));
+        steps.forEach((s, i) => {
+          const cls = 'qr-step' + (i === currentIdx ? ' active' : '') + (week.sides[s] ? ' done' : '');
+          const onCapture = dataUrl => {
+            week.sides[s] = dataUrl;
+            save();
+            const next = (i + 1 < steps.length && !week.sides[steps[i + 1]]) ? i + 1 : i;
+            renderModal(next);
+          };
+          const step = el('div', { class: cls, onClick: () => {
+            if (cameraAvailable()) openInAppCameraModal(onCapture);
+            else triggerNativeCameraInput(onCapture);
+          } },
+            el('div', { class: 'num' }, String(i + 1)),
+            el('div', {}, s.charAt(0).toUpperCase() + s.slice(1) + (week.sides[s] ? ' — gemaakt' : ''))
+          );
+          m.appendChild(step);
+          if (week.sides[s]) {
+            m.appendChild(el('div', { style: 'aspect-ratio: 4/3; border-radius: 6px; overflow: hidden; margin-bottom: 8px; max-width: 220px;' },
+              el('img', { src: week.sides[s], style: 'width: 100%; height: 100%; object-fit: cover;' })
+            ));
+          }
+        });
+        const allDone = steps.every(s => week.sides[s]);
+        m.appendChild(el('div', { class: 'actions' },
+          el('button', { class: 'btn', onClick: closeModal }, allDone ? 'Klaar' : 'Sluiten'),
+          allDone ? el('button', { class: 'btn primary', onClick: () => { closeModal(); render(); toast('3 zijden vastgelegd'); } }, 'Klaar') : null
+        ));
+      }
+    };
+    render();
+  }
+  renderModal(0);
+}
+
+// ---------- Settings modal ----------
+function showSettingsModal() {
+  let name = getUsername();
+  const sectionH = txt => el('h3', { style: 'font-size: 13px; color: var(--grey-500); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 16px; margin-bottom: 6px;' }, txt);
+  state.modal = {
+    render: m => {
+      m.appendChild(el('h3', {}, 'Instellingen'));
+      m.appendChild(sectionH('Wie ben ik?'));
+      m.appendChild(el('div', { class: 'field' },
+        el('label', {}, 'Naam (bij wijzigingen in het gedeelde bestand)'),
+        el('input', { placeholder: 'bv. Jarno of Peter', value: name, onInput: e => name = e.target.value.trim() })
+      ));
+
+      m.appendChild(sectionH('Bouwplan importeren (werkt overal)'));
+      m.appendChild(el('div', { style: 'font-size: 13px; color: var(--grey-500); margin-bottom: 8px;' },
+        'Werkt op telefoon, tablet en PC. Kies een Excel-bestand (Productionplans Lopik.xlsx) — eenmalige import.'));
+      m.appendChild(el('div', { style: 'display: flex; gap: 8px; flex-wrap: wrap;' },
+        el('button', { class: 'btn primary', onClick: () => { closeModal(); importExcelViaPlainInput(); } }, '📂 Upload Excel-bouwplan')
+      ));
+
+      m.appendChild(sectionH('Data delen tussen apparaten'));
+      m.appendChild(el('div', { style: 'font-size: 13px; color: var(--grey-500); margin-bottom: 8px;' },
+        'Op de PC: download een JSON-bestand. Op telefoon/tablet: laad dat bestand in. Werkt overal.'));
+      m.appendChild(el('div', { style: 'display: flex; gap: 8px; flex-wrap: wrap;' },
+        el('button', { class: 'btn', onClick: downloadDataAsFile }, '⬇ Download JSON (' + state.projects.length + ' projecten)'),
+        el('button', { class: 'btn', onClick: () => loadDataFromFile(false) }, '⬆ Upload JSON (vervang)'),
+        el('button', { class: 'btn', onClick: () => loadDataFromFile(true) }, '⬆ Upload JSON (samenvoegen)')
+      ));
+
+      m.appendChild(sectionH('Auto-sync (alleen desktop Chrome/Edge)'));
+      if (!fsaSupported()) {
+        m.appendChild(el('div', { style: 'padding: 10px; background: var(--amber-light); color: var(--amber-dark); border-radius: var(--radius); font-size: 12px;' },
+          'Deze browser ondersteunt geen live-link. Gebruik de upload/download-knoppen hierboven.'));
+      } else if (fileHandle) {
+        m.appendChild(el('div', { style: 'padding: 10px; background: var(--teal-light); color: var(--teal-dark); border-radius: var(--radius); font-size: 12px; margin-bottom: 8px;' },
+          el('div', {}, 'Gekoppeld: ' + fileHandle.name),
+          el('div', { style: 'font-size: 11px; opacity: 0.85;' }, state.projects.length + ' projecten lokaal')
+        ));
+        m.appendChild(el('div', { style: 'display: flex; gap: 6px; flex-wrap: wrap;' },
+          el('button', { class: 'btn sm', onClick: async () => { await readFromFile(); render(); toast('Geladen: ' + state.projects.length + ' projecten'); } }, 'Ververs'),
+          el('button', { class: 'btn sm danger', onClick: disconnectSharedFile }, 'Ontkoppel')
+        ));
+      } else {
+        m.appendChild(el('div', { style: 'font-size: 12px; color: var(--grey-500); margin-bottom: 8px;' },
+          'Auto-sync werkt op desktop Chrome/Edge. Op mobiel onbetrouwbaar — gebruik upload/download.'));
+        m.appendChild(el('div', { style: 'display: flex; gap: 6px; flex-wrap: wrap;' },
+          el('button', { class: 'btn sm', onClick: () => { setUsername(name); connectSharedFile('open'); closeModal(); } }, 'Koppel bestaand'),
+          el('button', { class: 'btn sm', onClick: () => { setUsername(name); connectSharedFile('new'); closeModal(); } }, 'Nieuw aanmaken')
+        ));
+      }
+
+      m.appendChild(el('div', { class: 'actions' },
+        el('button', { class: 'btn primary', onClick: () => { setUsername(name); closeModal(); } }, 'Sluiten')
+      ));
+    }
+  };
+  render();
+}
+
+// ---------- Boot ----------
+load();
+render();
+(async () => {
+  await tryRestoreHandle();
+  await tryRestoreExcelHandle();
+  if (!getUsername()) {
+    const n = prompt('Welkom bij FloorScan.\nVul je naam in:', '');
+    if (n && n.trim()) setUsername(n.trim());
+  }
+  render();
+})();
+</script>
+
+<!-- ============================================================ -->
+<!-- PWA: service worker registratie + install/update UX           -->
+<!-- Geïsoleerd in eigen <script> blok zodat bestaande app-logica  -->
+<!-- ongewijzigd blijft. Faalt stil op file:// (geen SW mogelijk). -->
+<!-- ============================================================ -->
+<script>
+(function pwaBootstrap() {
+  'use strict';
+
+  // 1. Service worker registratie — alleen op http(s), niet op file://
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    console.info('[FloorScan PWA] service worker overgeslagen — vereist HTTPS of localhost.');
+    return;
+  }
+
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+
+  navigator.serviceWorker.register('sw.js', { scope: './' })
+    .then(reg => {
+      console.info('[FloorScan PWA] service worker geregistreerd, scope:', reg.scope);
+
+      // Detect updates → toon banner met "Bijwerken" knop
+      reg.addEventListener('updatefound', () => {
+        const installing = reg.installing;
+        if (!installing) return;
+        installing.addEventListener('statechange', () => {
+          if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+            // Nieuwe versie staat klaar; vraag user om te verversen
+            showPwaBanner({
+              text: 'Nieuwe versie van FloorScan beschikbaar.',
+              action: 'Bijwerken',
+              onAction: () => {
+                installing.postMessage({ type: 'SKIP_WAITING' });
+              }
+            });
+          }
+        });
+      });
+
+      // Periodiek check (eens per uur in foreground) — handig op tablets die nooit echt sluiten
+      setInterval(() => { reg.update().catch(() => {}); }, 60 * 60 * 1000);
+    })
+    .catch(err => {
+      console.warn('[FloorScan PWA] service worker registratie mislukt:', err);
+    });
+
+  // 2. Install-prompt vangen (Chrome/Edge/Android)
+  let deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    // Toon alleen als de user 'm nog niet eerder heeft afgewezen deze sessie
+    if (sessionStorage.getItem('floorscan_install_dismissed')) return;
+    showPwaBanner({
+      text: 'Installeer FloorScan op het beginscherm voor sneller starten.',
+      action: 'Installeren',
+      onAction: async () => {
+        if (!deferredInstallPrompt) return;
+        deferredInstallPrompt.prompt();
+        try { await deferredInstallPrompt.userChoice; } catch (e) {}
+        deferredInstallPrompt = null;
+      }
+    });
+  });
+
+  window.addEventListener('appinstalled', () => {
+    console.info('[FloorScan PWA] geïnstalleerd op homescreen');
+    deferredInstallPrompt = null;
+    hidePwaBanner();
+  });
+
+  // 3. Banner UI (zelfstandig, geen afhankelijkheid van app render-loop)
+  function showPwaBanner({ text, action, onAction }) {
+    hidePwaBanner();
+    const bar = document.createElement('div');
+    bar.className = 'pwa-banner';
+    bar.id = 'pwa-banner';
+    const span = document.createElement('span');
+    span.textContent = text;
+    span.style.flex = '1';
+    const actBtn = document.createElement('button');
+    actBtn.textContent = action;
+    actBtn.addEventListener('click', () => {
+      try { onAction && onAction(); } catch (e) { console.warn(e); }
+      hidePwaBanner();
+    });
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'pwa-close';
+    closeBtn.textContent = '×';
+    closeBtn.setAttribute('aria-label', 'Sluiten');
+    closeBtn.addEventListener('click', () => {
+      sessionStorage.setItem('floorscan_install_dismissed', '1');
+      hidePwaBanner();
+    });
+    bar.appendChild(span);
+    bar.appendChild(actBtn);
+    bar.appendChild(closeBtn);
+    document.body.appendChild(bar);
+  }
+  function hidePwaBanner() {
+    const b = document.getElementById('pwa-banner');
+    if (b) b.remove();
+  }
+})();
+</script>
+
+</body>
+</html>
