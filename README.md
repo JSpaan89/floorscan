@@ -2,7 +2,7 @@
 
 Single-file Progressive Web App voor het registreren van tankvloer-werkbonnen via QR-scan, foto's en weekdoel-checklists. Pilot-versie voor Hal M / Hal L op de hoofdsite.
 
-**Live demo:** *[link verschijnt hier zodra GitHub Pages actief is]*
+**Live demo:** https://jspaan89.github.io/floorscan/FloorScan_pilot_v24.html
 
 ## Hosting
 
@@ -34,7 +34,8 @@ Deze repo wordt gehost via GitHub Pages. De app draait volledig client-side — 
 
 ## Versie
 
-**v2.4.0** (2026-04-29) — eerste PWA-release. Zie de commit-history voor wijzigingen.
+**v2.4.1** (2026-04-29) — Web Share Target + file_handlers + binary-content detectie.
+**v2.4.0** (2026-04-29) — eerste PWA-release.
 
 ## Licentie
 

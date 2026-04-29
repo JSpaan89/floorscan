@@ -331,7 +331,7 @@ h3 { margin: 16px 0 8px; font-size: 15px; color: var(--grey-700); font-weight: 5
 //  - Validatie + preview-modal voor import (vervang of merge)
 // Doel-platform: Android tablets (Chrome/Edge) + Windows desktop (Chrome/Edge).
 // ------------------------------------------------------------------
-const FLOORSCAN_VERSION = 'v2.4.0';
+const FLOORSCAN_VERSION = 'v2.4.1';
 
 const STORAGE_KEY = 'floorscan_v2';
 const USER_KEY = 'floorscan_user';
@@ -678,49 +678,100 @@ function loadDataFromFile(merge) {
     const f = e.target.files && e.target.files[0];
     inp.remove();
     if (!f) return;
+    await processIncomingFile(f, defaultMode);
+  };
+  document.body.appendChild(inp);
+  inp.click();
+}
 
-    // Sanity check op bestandsgrootte (paranoia: voorkom 50MB JSON parse)
-    if (f.size > 50 * 1024 * 1024) {
+// Geparametriseerde import-pipeline: gebruikt door file-picker, share-target én file_handlers.
+// Accepteert óf een File-object, óf een plain object {name, type, size, content}
+// (zoals opgeslagen door de service worker).
+async function processIncomingFile(input, defaultMode) {
+  let name = '?', size = 0, type = '', txt = '';
+
+  if (input && typeof input === 'object' && 'content' in input && typeof input.content === 'string') {
+    // Object uit IndexedDB-inbox (share-target)
+    name = input.name || 'shared.json';
+    size = input.size || (input.content.length);
+    type = input.type || 'application/json';
+    txt = input.content;
+  } else if (input && typeof input.text === 'function') {
+    // File of Blob
+    name = input.name || 'shared.json';
+    size = input.size || 0;
+    type = input.type || '';
+    if (size > 50 * 1024 * 1024) {
       alert('Bestand is groter dan 50 MB — onwaarschijnlijk een FloorScan-export.');
       return;
     }
-
-    let txt;
     try {
-      txt = await f.text();
+      txt = await input.text();
     } catch (err) {
       alert('Kon bestand niet lezen: ' + err.message);
       return;
     }
+  } else {
+    alert('Onverwacht bestandstype ontvangen.');
+    return;
+  }
 
-    let parsed;
-    try {
-      parsed = JSON.parse(txt);
-    } catch (err) {
-      alert('Geen geldig JSON-bestand.\n\n' +
-            'Tip: kies een bestand met de naam "floorscan-..." en de extensie .json.\n' +
-            (f.name ? 'Gekozen: ' + f.name : '') +
-            '\n\nFout: ' + err.message);
-      return;
-    }
+  // Heuristiek: detect binaire content (bv. OneDrive-placeholder MSMAMARPC,
+  // Office-encrypted blobs, etc.) — geef dan een gerichte fout in plaats van
+  // de cryptische JSON.parse-error.
+  if (looksLikeBinary(txt)) {
+    alert('Dit bestand bevat geen tekst maar binaire data — vrijwel zeker een ' +
+          'OneDrive-placeholder of een door OneDrive geblokkeerd/versleuteld bestand.\n\n' +
+          'Probeer dit:\n' +
+          '1. Open de OneDrive-app en maak het bestand offline beschikbaar\n' +
+          '   (long-press → "Beschikbaar maken op apparaat")\n' +
+          '2. Of: e-mail het bestand naar jezelf, sla op als bijlage, en upload daarvan.\n' +
+          '3. Of: deel het JSON-bestand vanuit OneDrive naar FloorScan via "Delen → FloorScan".\n\n' +
+          'Gekozen: ' + name);
+    return;
+  }
 
-    // Structurele validatie
-    if (!parsed || typeof parsed !== 'object') {
-      alert('Bestand bevat geen geldig FloorScan-object.');
-      return;
-    }
-    if (!Array.isArray(parsed.projects)) {
-      alert('Bestand mist het verwachte "projects"-veld. Mogelijk verkeerd bestand?\n\n' +
-            (f.name ? 'Gekozen: ' + f.name : ''));
-      return;
-    }
+  let parsed;
+  try {
+    parsed = JSON.parse(txt);
+  } catch (err) {
+    alert('Geen geldig JSON-bestand.\n\n' +
+          'Tip: kies een bestand met de naam "floorscan-..." en de extensie .json.\n' +
+          'Gekozen: ' + name +
+          '\n\nFout: ' + err.message);
+    return;
+  }
 
-    // Bouw preview-statistieken
-    const stats = computeImportStats(parsed);
-    showImportPreviewModal(parsed, stats, f, defaultMode);
-  };
-  document.body.appendChild(inp);
-  inp.click();
+  if (!parsed || typeof parsed !== 'object') {
+    alert('Bestand bevat geen geldig FloorScan-object.');
+    return;
+  }
+  if (!Array.isArray(parsed.projects)) {
+    alert('Bestand mist het verwachte "projects"-veld. Mogelijk verkeerd bestand?\n\n' +
+          'Gekozen: ' + name);
+    return;
+  }
+
+  const stats = computeImportStats(parsed);
+  // Faux-File voor de preview-modal (heeft alleen name + size nodig)
+  const fileLike = { name, size };
+  showImportPreviewModal(parsed, stats, fileLike, defaultMode || 'merge');
+}
+
+// Detecteer of de eerste 200 chars veel non-printable bytes bevatten —
+// indicatie van binaire content (OneDrive-placeholder, IRM-encrypted, etc.).
+function looksLikeBinary(text) {
+  if (!text || text.length === 0) return false;
+  const sample = text.slice(0, 200);
+  let nonPrintable = 0;
+  for (let i = 0; i < sample.length; i++) {
+    const c = sample.charCodeAt(i);
+    // Tab (9), LF (10), CR (13) zijn legaal. Alles 0-8, 11-12, 14-31, 127 = control char.
+    if (c < 9 || (c > 13 && c < 32) || c === 127) nonPrintable++;
+    // Ook null bytes en MSMAMARPC-achtige headers vlaggen
+    if (c === 0) return true;
+  }
+  return (nonPrintable / sample.length) > 0.05;
 }
 
 // Bereken samenvattende cijfers van een te-importeren payload
@@ -1646,7 +1697,7 @@ function renderTop() {
   return el('div', { class: 'top' },
     el('h1', {},
       'FloorScan',
-      el('span', { class: 'tag' }, 'pilot v2.3 \u2014 Gpi Tanks')
+      el('span', { class: 'tag' }, 'pilot v2.4 \u2014 Gpi Tanks')
     ),
     el('div', { class: 'top-actions' },
       el('div', { class: 'week-pill', onClick: () => navigate('home'), title: 'Huidige week \u2014 ga naar overzicht', style: 'cursor: pointer;' },
@@ -2911,6 +2962,123 @@ render();
     const b = document.getElementById('pwa-banner');
     if (b) b.remove();
   }
+})();
+
+// ============================================================
+// PWA: inkomende bestanden via share-target en file_handlers
+// ============================================================
+(function pwaInbox() {
+  'use strict';
+
+  const SHARE_INBOX_DB = 'floorscan_share';
+  const SHARE_INBOX_STORE = 'inbox';
+  const SHARE_INBOX_KEY = 'pending';
+
+  // 1) share-target: SW heeft een POST opgevangen, file in IDB gezet, en redirected naar
+  //    deze pagina met ?share=1. Pak het bestand op en gooi het in de import-pipeline.
+  async function consumeSharedInbox() {
+    const url = new URL(location.href);
+    if (url.searchParams.get('share') !== '1') return;
+    // Maak URL meteen schoon zodat reload geen replay veroorzaakt
+    history.replaceState({}, '', location.pathname);
+    try {
+      const item = await idbInboxGet();
+      if (item) {
+        await idbInboxClear();
+        // Wacht tot de app gerenderd is voordat we modal openen
+        await waitForAppReady();
+        if (typeof processIncomingFile === 'function') {
+          processIncomingFile(item, 'merge');
+        } else {
+          console.warn('[FloorScan PWA] processIncomingFile niet beschikbaar — app niet geladen?');
+        }
+      }
+    } catch (err) {
+      console.warn('[FloorScan PWA] shared-inbox lezen mislukt', err);
+    }
+  }
+
+  // 2) file_handlers (launchQueue): user heeft "Open with FloorScan" gekozen vanuit
+  //    een Files-app. Bestand komt binnen als FileSystemFileHandle.
+  function consumeLaunchQueue() {
+    if (!('launchQueue' in window) || !('LaunchParams' in window)) return;
+    try {
+      window.launchQueue.setConsumer(async (params) => {
+        if (!params || !params.files || !params.files.length) return;
+        await waitForAppReady();
+        for (const handle of params.files) {
+          try {
+            const file = await handle.getFile();
+            if (typeof processIncomingFile === 'function') {
+              processIncomingFile(file, 'merge');
+              break; // 1 bestand tegelijk verwerken
+            }
+          } catch (err) {
+            console.warn('[FloorScan PWA] launch file lezen mislukt', err);
+          }
+        }
+      });
+    } catch (err) {
+      console.warn('[FloorScan PWA] launchQueue setup mislukt', err);
+    }
+  }
+
+  function waitForAppReady() {
+    return new Promise(resolve => {
+      const check = () => {
+        if (typeof processIncomingFile === 'function' && document.getElementById('app')) {
+          resolve();
+        } else {
+          setTimeout(check, 100);
+        }
+      };
+      check();
+    });
+  }
+
+  function idbInboxGet() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(SHARE_INBOX_DB, 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(SHARE_INBOX_STORE)) {
+          db.createObjectStore(SHARE_INBOX_STORE);
+        }
+      };
+      req.onsuccess = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(SHARE_INBOX_STORE)) {
+          resolve(null); return;
+        }
+        const tx = db.transaction(SHARE_INBOX_STORE, 'readonly');
+        const r = tx.objectStore(SHARE_INBOX_STORE).get(SHARE_INBOX_KEY);
+        r.onsuccess = () => resolve(r.result || null);
+        r.onerror = () => reject(r.error);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function idbInboxClear() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(SHARE_INBOX_DB, 1);
+      req.onsuccess = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(SHARE_INBOX_STORE)) {
+          resolve(); return;
+        }
+        const tx = db.transaction(SHARE_INBOX_STORE, 'readwrite');
+        tx.objectStore(SHARE_INBOX_STORE).delete(SHARE_INBOX_KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  // Start beide flows
+  consumeSharedInbox();
+  consumeLaunchQueue();
 })();
 </script>
 
