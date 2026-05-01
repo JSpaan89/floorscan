@@ -108,13 +108,16 @@ h3 { margin: 16px 0 8px; font-size: 15px; color: var(--grey-700); font-weight: 5
 .panel-label { font-size: 11px; font-weight: 600; letter-spacing: 0.7px; color: var(--grey-500); text-transform: uppercase; margin-bottom: 4px; }
 .panel-sub { font-size: 13px; color: var(--grey-500); margin-bottom: 14px; }
 
-/* Photos */
-.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px; margin-bottom: 12px; }
-.photo-thumb { aspect-ratio: 1; border-radius: 6px; background: var(--grey-100); position: relative; overflow: hidden; cursor: pointer; }
+/* Photos — vergroot v2.4.3 voor makkelijker terug-kijken */
+.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.photo-thumb { aspect-ratio: 1; border-radius: 6px; background: var(--grey-100); position: relative; overflow: hidden; cursor: pointer; transition: transform 0.1s; }
+.photo-thumb:hover { transform: scale(1.02); }
 .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.photo-thumb .del { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.55); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 14px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.photo-hero { aspect-ratio: 4/3; border-radius: var(--radius); background: var(--grey-100); margin-bottom: 8px; overflow: hidden; }
+.photo-thumb .del { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.55); color: white; border: none; border-radius: 50%; width: 28px; height: 28px; font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.photo-hero { aspect-ratio: 16/10; border-radius: var(--radius); background: var(--grey-900); margin-bottom: 8px; overflow: hidden; cursor: pointer; max-height: 480px; }
 .photo-hero img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.photo-hero-hint { position: relative; }
+.photo-hero-hint::after { content: '🔍 Tik om groot te bekijken'; position: absolute; bottom: 6px; right: 8px; background: rgba(0,0,0,0.6); color: white; font-size: 11px; padding: 3px 8px; border-radius: 4px; pointer-events: none; }
 .photo-upload { border: 2px dashed var(--border); border-radius: var(--radius); padding: 24px; text-align: center; color: var(--grey-500); cursor: pointer; transition: border-color 0.2s; }
 .photo-upload:hover { border-color: var(--teal); color: var(--teal-dark); }
 .photo-upload input { display: none; }
@@ -331,7 +334,7 @@ h3 { margin: 16px 0 8px; font-size: 15px; color: var(--grey-700); font-weight: 5
 //  - Validatie + preview-modal voor import (vervang of merge)
 // Doel-platform: Android tablets (Chrome/Edge) + Windows desktop (Chrome/Edge).
 // ------------------------------------------------------------------
-const FLOORSCAN_VERSION = 'v2.4.2';
+const FLOORSCAN_VERSION = 'v2.4.4';
 
 const STORAGE_KEY = 'floorscan_v2';
 const USER_KEY = 'floorscan_user';
@@ -1695,7 +1698,7 @@ function renderTop() {
   return el('div', { class: 'top' },
     el('h1', {},
       'FloorScan',
-      el('span', { class: 'tag' }, 'pilot v2.4 \u2014 Gpi Tanks')
+      el('span', { class: 'tag' }, 'pilot ' + FLOORSCAN_VERSION + ' \u2014 Gpi Tanks')
     ),
     el('div', { class: 'top-actions' },
       el('div', { class: 'week-pill', onClick: () => navigate('home'), title: 'Huidige week \u2014 ga naar overzicht', style: 'cursor: pointer;' },
@@ -1818,7 +1821,15 @@ function renderHome(main) {
     main.appendChild(empty);
     return;
   }
-  state.projects.forEach(p => {
+  // Chronologisch sorteren op projectnummer (oplopend = oudste eerst).
+  // Slice() om de origineel-array niet te muteren — JSON-export volgorde blijft intact.
+  const sortedProjects = state.projects.slice().sort((a, b) => {
+    const na = parseInt(String(a.number || '').replace(/\D/g, ''), 10);
+    const nb = parseInt(String(b.number || '').replace(/\D/g, ''), 10);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return String(a.number || '').localeCompare(String(b.number || ''));
+  });
+  sortedProjects.forEach(p => {
     const werkbonStatuses = p.werkbonnen.map(werkbonStatus);
     const worstStatus = werkbonStatuses.includes('red') ? 'red'
       : werkbonStatuses.includes('amber') ? 'amber'
@@ -2067,16 +2078,65 @@ function renderWeek(main) {
 
   // Speciaal: drie zijden-foto's (voor / zijde / achter) \u2014 gevuld via QR-flow of camera
   if (!week.sides) week.sides = { voor: null, zijde: null, achter: null };
+  const sideKeys = ['voor', 'zijde', 'achter'];
+
+  // Helpers voor de side-lightbox: actuele state ophalen + delete-callback
+  const getFilledSides = () => sideKeys
+    .map(k => ({ key: k, photo: week.sides[k] }))
+    .filter(item => item.photo);
+
+  const openSideLightbox = (startKey) => {
+    const initial = getFilledSides();
+    if (!initial.length) return;
+    let startIdx = initial.findIndex(item => item.key === startKey);
+    if (startIdx < 0) startIdx = 0;
+    openPhotoLightbox(
+      () => getFilledSides().map(item => item.photo),
+      startIdx,
+      {
+        title: (i) => {
+          const items = getFilledSides();
+          return items[i] ? 'Zijde: ' + items[i].key.toUpperCase() : 'Zijde';
+        },
+        onDelete: (i) => {
+          const items = getFilledSides();
+          const k = items[i] && items[i].key;
+          if (!k) return;
+          week.sides[k] = null;
+          save(); render();
+        },
+        extraActions: [
+          {
+            label: '\ud83d\udcf7 Opnieuw maken',
+            onClick: (i) => {
+              const items = getFilledSides();
+              const currentKey = (items[i] && items[i].key) || startKey;
+              closeModal();
+              captureSidePhoto(week, currentKey);
+            }
+          }
+        ]
+      }
+    );
+  };
+
   const sideRow = el('div', { class: 'photo-side-row' });
-  ['voor', 'zijde', 'achter'].forEach(key => {
-    const cell = el('div', { class: 'photo-side' + (week.sides[key] ? '' : ' empty') });
-    if (week.sides[key]) {
-      cell.appendChild(el('img', { src: week.sides[key], onClick: () => { week.photos = week.photos || []; week.photos.unshift(week.sides[key]); save(); render(); } }));
+  sideKeys.forEach(key => {
+    const filled = !!week.sides[key];
+    const cell = el('div', { class: 'photo-side' + (filled ? '' : ' empty') });
+    if (filled) {
+      cell.appendChild(el('img', { src: week.sides[key] }));
       cell.appendChild(el('span', { class: 'side-label' }, key));
+      // Tik op een gevulde cel \u2192 open lightbox-gallery met alle 3 zijden
+      cell.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSideLightbox(key);
+      });
     } else {
       cell.appendChild(el('span', {}, key.toUpperCase() + '\nnog geen foto'));
+      // Tik op een lege cel \u2192 camera-flow voor die zijde
+      cell.addEventListener('click', () => captureSidePhoto(week, key));
     }
-    cell.addEventListener('click', () => captureSidePhoto(week, key));
     sideRow.appendChild(cell);
   });
   pFotos.appendChild(sideRow);
@@ -2085,12 +2145,29 @@ function renderWeek(main) {
   ));
 
   if ((week.photos || []).length > 0) {
-    pFotos.appendChild(el('div', { class: 'photo-hero' }, el('img', { src: week.photos[0] })));
+    // Helpers voor de lightbox: getter (zodat verwijderen live doorwerkt) + delete-callback
+    const getWeekPhotos = () => week.photos || [];
+    const deleteAt = (i) => {
+      if (!week.photos) return;
+      week.photos.splice(i, 1);
+      save(); render();
+    };
+    // Hero \u2014 klik opent lightbox op de eerste foto
+    const hero = el('div', { class: 'photo-hero photo-hero-hint',
+      onClick: () => openPhotoLightbox(getWeekPhotos, 0, { onDelete: deleteAt, title: 'W' + week.week })
+    }, el('img', { src: week.photos[0] }));
+    pFotos.appendChild(hero);
+    // Thumbnail-grid \u2014 klik opent lightbox op die specifieke foto
     const grid = el('div', { class: 'photos' });
     (week.photos || []).forEach((p, i) => {
       const thumb = el('div', { class: 'photo-thumb' });
-      thumb.appendChild(el('img', { src: p, onClick: () => { week.photos.splice(i, 1); week.photos.unshift(p); save(); render(); } }));
-      thumb.appendChild(el('button', { class: 'del', onClick: () => { if (confirm('Foto verwijderen?')) { week.photos.splice(i, 1); save(); render(); } } }, '\u00d7'));
+      thumb.appendChild(el('img', { src: p,
+        onClick: (e) => { e.stopPropagation(); openPhotoLightbox(getWeekPhotos, i, { onDelete: deleteAt, title: 'W' + week.week }); }
+      }));
+      thumb.appendChild(el('button', { class: 'del', onClick: (e) => {
+        e.stopPropagation();
+        if (confirm('Foto verwijderen?')) { week.photos.splice(i, 1); save(); render(); }
+      } }, '\u00d7'));
       grid.appendChild(thumb);
     });
     pFotos.appendChild(grid);
@@ -2153,6 +2230,88 @@ function closeModal() {
     try { state.modal.onClose(); } catch (e) {}
   }
   state.modal = null; render();
+}
+
+// Lightbox-modal voor foto's: groot beeld met prev/volgende/delete navigatie.
+// getPhotos = callback die de actuele array teruggeeft (zodat delete live doorwerkt).
+// opts.onDelete(idx) = callback om foto te verwijderen (optioneel; geen knop als ontbreekt).
+// opts.title = optionele kop boven de foto.
+// opts.extraActions = [{label, onClick}] — extra knoppen onder de foto (bv. "Opnieuw maken").
+function openPhotoLightbox(getPhotos, startIdx, opts) {
+  let idx = startIdx || 0;
+  const onDelete = opts && opts.onDelete;
+  const titleOpt = opts && opts.title;
+  const extraActions = (opts && Array.isArray(opts.extraActions)) ? opts.extraActions : [];
+  state.modal = {
+    onClose: () => {},
+    render: m => {
+      // Override de standaard 500px max-width voor zo groot mogelijk beeld
+      m.style.maxWidth = '98vw';
+      m.style.maxHeight = '95vh';
+      m.style.padding = '8px';
+      const photos = getPhotos() || [];
+      if (!photos.length) { state.modal = null; render(); return; }
+      if (idx >= photos.length) idx = photos.length - 1;
+      if (idx < 0) idx = 0;
+
+      // Title kan string of functie(idx) zijn
+      const titleStr = (typeof titleOpt === 'function') ? (titleOpt(idx) || '')
+                     : (typeof titleOpt === 'string') ? titleOpt : '';
+
+      m.appendChild(el('div', { style: 'display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px;' },
+        el('div', { style: 'font-size:14px; font-weight:500;' },
+          (titleStr ? titleStr + (photos.length > 1 ? ' — ' : '') : '') +
+          (photos.length > 1 ? 'Foto ' + (idx + 1) + ' van ' + photos.length : '')),
+        el('button', { class: 'btn sm', onClick: closeModal }, '✕ Sluiten')
+      ));
+
+      const imgWrap = el('div', { style: 'background:var(--grey-900); border-radius:var(--radius); overflow:hidden; display:flex; align-items:center; justify-content:center; min-height:200px;' });
+      imgWrap.appendChild(el('img', {
+        src: photos[idx],
+        style: 'max-width:100%; max-height:82vh; width:auto; height:auto; object-fit:contain; display:block;'
+      }));
+      m.appendChild(imgWrap);
+
+      const nav = el('div', { style: 'display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;' });
+      if (photos.length > 1) {
+        nav.appendChild(el('button', {
+          class: 'btn',
+          style: 'flex:1; min-height:48px; min-width:120px;' + (idx === 0 ? ' opacity:0.4; pointer-events:none;' : ''),
+          onClick: () => { if (idx > 0) { idx--; render(); } }
+        }, '← Vorige'));
+      }
+      if (onDelete) {
+        nav.appendChild(el('button', {
+          class: 'btn danger',
+          style: 'min-height:48px;',
+          onClick: () => {
+            if (!confirm('Foto verwijderen?')) return;
+            try { onDelete(idx); } catch (e) { console.warn(e); }
+            render();
+          }
+        }, '🗑 Verwijder'));
+      }
+      extraActions.forEach(act => {
+        nav.appendChild(el('button', {
+          class: 'btn',
+          style: 'min-height:48px;',
+          onClick: () => { try { act.onClick && act.onClick(idx); } catch (e) { console.warn(e); } }
+        }, act.label));
+      });
+      if (photos.length > 1) {
+        nav.appendChild(el('button', {
+          class: 'btn',
+          style: 'flex:1; min-height:48px; min-width:120px;' + (idx >= photos.length - 1 ? ' opacity:0.4; pointer-events:none;' : ''),
+          onClick: () => { if (idx < photos.length - 1) { idx++; render(); } }
+        }, 'Volgende →'));
+      }
+      m.appendChild(nav);
+
+      m.appendChild(el('div', { style: 'font-size:12px; color:var(--grey-500); text-align:center; margin-top:10px;' },
+        photos.length > 1 ? 'Wissel met ← / → · Tik buiten de foto om te sluiten' : 'Tik buiten de foto om te sluiten'));
+    }
+  };
+  render();
 }
 
 function showProjectModal() {

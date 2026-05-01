@@ -1,4 +1,4 @@
-/* FloorScan PWA service worker — v2.4.2
+/* FloorScan PWA service worker — v2.4.4
  *
  * Strategy:
  *   - App-shell (HTML, manifest, icons): cache-first, fall back to network.
@@ -15,6 +15,15 @@
  * v2.4.2 toevoeging:
  *   - Smarticate-QR (SPCPART) parser-fallback in app.
  *   - Tekening-paneel + formulier-velden uit UI verwijderd; data-velden in JSON gehandhaafd.
+ * v2.4.3 toevoeging:
+ *   - Foto-lightbox: klik op hero/thumbnail opent groot beeld met prev/volgende/delete.
+ *   - Thumbnails groter (140px ipv 90px).
+ *   - Projectenlijst chronologisch gesorteerd op projectnummer (oplopend).
+ * v2.4.4 toevoeging:
+ *   - Side-photos (voor/zijde/achter) klikbaar als 3-foto gallery in lightbox.
+ *   - Lightbox-beeld groter: 98vw × 82vh max (was 95vw × 75vh).
+ *   - Header-versie label dynamisch via FLOORSCAN_VERSION constante.
+ *   - Lightbox titel kan ook callback (idx) zijn voor dynamische label per foto.
  *
  * Notes:
  *   - POSTs naar share-target worden afgevangen; alle andere POSTs gaan door.
@@ -23,7 +32,7 @@
  *     network requests, the SW never sees them.
  */
 
-const SW_VERSION = 'v2.4.2';
+const SW_VERSION = 'v2.4.4';
 const CACHE_SHELL = `floorscan-shell-${SW_VERSION}`;
 const CACHE_CDN   = `floorscan-cdn-${SW_VERSION}`;
 const SHARE_INBOX_DB = 'floorscan_share';

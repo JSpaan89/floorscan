@@ -34,6 +34,7 @@ Deze repo wordt gehost via GitHub Pages. De app draait volledig client-side — 
 
 ## Versie
 
+**v2.4.4** (2026-05-01) — Side-foto's (voor/zijde/achter) klikbaar als gallery in lightbox; lightbox-beeld groter (98vw × 82vh); header-versie dynamisch.
 **v2.4.3** (2026-05-01) — Foto-lightbox (groot beeld + nav), grotere thumbnails, projectenlijst chronologisch gesorteerd.
 **v2.4.2** (2026-05-01) — Smarticate-QR (SPCPART) fallback met handmatige koppeling, Tekening-paneel verwijderd.
 **v2.4.1** (2026-04-29) — Web Share Target + file_handlers + binary-content detectie.
