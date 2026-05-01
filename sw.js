@@ -1,4 +1,4 @@
-/* FloorScan PWA service worker — v2.4.1
+/* FloorScan PWA service worker — v2.4.2
  *
  * Strategy:
  *   - App-shell (HTML, manifest, icons): cache-first, fall back to network.
@@ -12,6 +12,9 @@
  * v2.4.1 toevoeging:
  *   - Web Share Target POST handler op ./share-target → bestand wordt in IndexedDB
  *     "floorscan_share/inbox" gezet, redirect naar app met ?share=1.
+ * v2.4.2 toevoeging:
+ *   - Smarticate-QR (SPCPART) parser-fallback in app.
+ *   - Tekening-paneel + formulier-velden uit UI verwijderd; data-velden in JSON gehandhaafd.
  *
  * Notes:
  *   - POSTs naar share-target worden afgevangen; alle andere POSTs gaan door.
@@ -20,7 +23,7 @@
  *     network requests, the SW never sees them.
  */
 
-const SW_VERSION = 'v2.4.1';
+const SW_VERSION = 'v2.4.2';
 const CACHE_SHELL = `floorscan-shell-${SW_VERSION}`;
 const CACHE_CDN   = `floorscan-cdn-${SW_VERSION}`;
 const SHARE_INBOX_DB = 'floorscan_share';

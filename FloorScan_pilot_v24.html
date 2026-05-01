@@ -331,7 +331,7 @@ h3 { margin: 16px 0 8px; font-size: 15px; color: var(--grey-700); font-weight: 5
 //  - Validatie + preview-modal voor import (vervang of merge)
 // Doel-platform: Android tablets (Chrome/Edge) + Windows desktop (Chrome/Edge).
 // ------------------------------------------------------------------
-const FLOORSCAN_VERSION = 'v2.4.1';
+const FLOORSCAN_VERSION = 'v2.4.2';
 
 const STORAGE_KEY = 'floorscan_v2';
 const USER_KEY = 'floorscan_user';
@@ -1637,8 +1637,6 @@ WERKBON
 - Nummer: ${werkbon.number}
 - Omschrijving: ${werkbon.description}
 - Zone: ${werkbon.zone}
-- Tekening-sheet: ${werkbon.drawing_sheet || '\u2014'}
-- Context uit tekening: ${werkbon.drawing_notes || '\u2014'}
 
 WEEK W${week.week}
 - Weekdoel: ${week.weekdoel}
@@ -1907,9 +1905,7 @@ function renderWerkbon(main) {
 
   main.appendChild(el('h2', {}, 'Werkbon ' + w.number + ' \u2014 ' + w.description));
   main.appendChild(el('dl', { class: 'meta' },
-    el('dt', {}, 'Zone'), el('dd', {}, w.zone),
-    el('dt', {}, 'Tekening-sheet'), el('dd', {}, w.drawing_sheet || '\u2014'),
-    el('dt', {}, 'Tekening-context'), el('dd', {}, w.drawing_notes || '\u2014')
+    el('dt', {}, 'Zone'), el('dd', {}, w.zone)
   ));
 
   // Quick-actions: huidige week + QR-sticker
@@ -1985,12 +1981,6 @@ function renderWeek(main) {
   main.appendChild(el('div', { class: 'status-banner ' + st }, stLabel + (week.confirmed_pct != null ? ' \u2014 bevestigd ' + week.confirmed_pct + '% (streef ' + week.streef_pct + '%)' : '')));
 
   const panels = el('div', { class: 'panels' });
-
-  const pTekening = el('div', { class: 'panel' });
-  pTekening.appendChild(el('div', { class: 'panel-label' }, 'Tekening'));
-  pTekening.appendChild(el('div', { class: 'panel-sub' }, werkbon.drawing_sheet ? 'Sheet ' + werkbon.drawing_sheet : 'geen sheet'));
-  pTekening.appendChild(el('div', { style: 'font-size: 13px; line-height: 1.6; color: var(--grey-700); padding: 12px; background: var(--grey-50); border-radius: var(--radius);' }, werkbon.drawing_notes || 'Geen tekening-context ingevuld. Vul dit bij de werkbon in (bijv. \u201C4 rompen, 9 nozzles, 4 in werkbon 10400\u201D).'));
-  panels.appendChild(pTekening);
 
   const pDoel = el('div', { class: 'panel' });
   pDoel.appendChild(el('div', { class: 'panel-label' }, 'Weekdoel \u00b7 W' + week.week));
@@ -2196,16 +2186,17 @@ function showProjectModal() {
 function addDefaultWerkbonnen() {
   const p = getProject();
   const defaults = [
-    { number: '10100', description: 'Top assembly', zone: 'Hal M', drawing_sheet: '-100' },
-    { number: '10300', description: 'Bottom assembly', zone: 'Hal M', drawing_sheet: '-300' },
-    { number: '10400', description: 'Final assembly', zone: 'Hal L', drawing_sheet: '-400' },
+    { number: '10100', description: 'Top assembly', zone: 'Hal M' },
+    { number: '10300', description: 'Bottom assembly', zone: 'Hal M' },
+    { number: '10400', description: 'Final assembly', zone: 'Hal L' },
   ];
-  defaults.forEach(d => p.werkbonnen.push({ id: uid(), ...d, drawing_notes: '', weeks: [] }));
+  // drawing_sheet/drawing_notes blijven leeg; veld in JSON-model gehandhaafd voor back-compat
+  defaults.forEach(d => p.werkbonnen.push({ id: uid(), ...d, drawing_sheet: '', drawing_notes: '', weeks: [] }));
   save(); render();
 }
 
 function showWerkbonModal() {
-  let nr = '', desc = '', zone = 'Hal L', sheet = '', notes = '';
+  let nr = '', desc = '', zone = 'Hal L';
   state.modal = {
     render: m => {
       m.appendChild(el('h3', {}, 'Werkbon toevoegen'));
@@ -2226,19 +2217,14 @@ function showWerkbonModal() {
           });
           return s;
         })()));
-      m.appendChild(el('div', { class: 'field' },
-        el('label', {}, 'Tekening-sheet'),
-        el('input', { placeholder: 'bv. -400', onInput: e => sheet = e.target.value.trim() })));
-      m.appendChild(el('div', { class: 'field' },
-        el('label', {}, 'Tekening-context'),
-        el('textarea', { placeholder: 'bv. 4 rompen, 9 nozzles, 4 in werkbon', onInput: e => notes = e.target.value })));
       m.appendChild(el('div', { class: 'actions' },
         el('button', { class: 'btn', onClick: closeModal }, 'Annuleer'),
         el('button', { class: 'btn primary', onClick: () => {
           if (!nr) return alert('Nummer verplicht');
           const p = getProject();
           const id = uid();
-          p.werkbonnen.push({ id, number: nr, description: desc, zone, drawing_sheet: sheet, drawing_notes: notes, weeks: [] });
+          // drawing_sheet/drawing_notes leeg laten — niet meer in UI maar wel in JSON voor back-compat
+          p.werkbonnen.push({ id, number: nr, description: desc, zone, drawing_sheet: '', drawing_notes: '', weeks: [] });
           save(); closeModal(); render();
         } }, 'Aanmaken')
       ));
@@ -2434,28 +2420,119 @@ let qrScanner = null;
 function parseQrPayload(text) {
   if (!text) return null;
   const t = String(text).trim();
+
+  // Format 1: JSON-payload (eigen Gpi format)
   if (t.startsWith('{')) {
     try {
       const j = JSON.parse(t);
       const proj = j.p || j.project || j.projectnummer;
       const wb = j.w || j.wb || j.werkbon || j.werkbonnummer;
-      if (proj && wb) return { project: String(proj), werkbon: String(wb) };
+      if (proj && wb) return { kind: 'standard', project: String(proj), werkbon: String(wb), raw: t };
     } catch (e) {}
   }
+
+  // Format 2: URL met ?p=&w= parameters (eigen Gpi format)
   if (/^https?:\/\//i.test(t)) {
     try {
       const url = new URL(t);
       const proj = url.searchParams.get('p') || url.searchParams.get('project');
       const wb = url.searchParams.get('w') || url.searchParams.get('werkbon');
-      if (proj && wb) return { project: proj, werkbon: wb };
+      if (proj && wb) return { kind: 'standard', project: proj, werkbon: wb, raw: t };
     } catch (e) {}
   }
+
+  // Format 3: Smarticate-fallback — herkent SPCPART-id ergens in payload (URL of plain).
+  // Smarticate-stickers bevatten alleen een verwijzing (vermoedelijk naar hun cloud), zonder
+  // direct project/werkbon-info. Resolve handmatig via cache (zie resolveSpcpartAndContinue).
+  const spcMatch = t.match(/SPCPART[\-_]?(\d+)/i);
+  if (spcMatch) {
+    return { kind: 'spcpart', spcpartId: 'SPCPART' + spcMatch[1], raw: t };
+  }
+
+  // Format 4: <projectnr>-<werkbonnr> en variaties (Gpi standaard sticker)
   const cleaned = t.replace(/^FS[:|\-]/i, '');
   const parts = cleaned.split(/[|;\/\-_,\s]+/).map(s => s.trim()).filter(Boolean);
   if (parts.length >= 2 && /^\d+$/.test(parts[0]) && /^\w+$/.test(parts[1])) {
-    return { project: parts[0], werkbon: parts[1] };
+    return { kind: 'standard', project: parts[0], werkbon: parts[1], raw: t };
   }
+
   return null;
+}
+
+// SPCPART-resolve cache: { "SPCPART213013": { project, werkbon, desc, resolvedAt } }
+function getSpcpartCache() {
+  try { return JSON.parse(localStorage.getItem('floorscan_spcpart_map') || '{}'); }
+  catch (e) { return {}; }
+}
+function saveSpcpartMapping(spcpartId, project, werkbon, desc) {
+  const cache = getSpcpartCache();
+  cache[spcpartId] = {
+    project: String(project),
+    werkbon: String(werkbon),
+    desc: desc || '',
+    resolvedAt: new Date().toISOString()
+  };
+  localStorage.setItem('floorscan_spcpart_map', JSON.stringify(cache));
+}
+
+// Resolveer een Smarticate-QR. Gebruikt cache; vraagt anders eenmalig om koppeling.
+function resolveSpcpartAndContinue(parsed) {
+  const cache = getSpcpartCache();
+  const cached = cache[parsed.spcpartId];
+  if (cached) {
+    toast('Smarticate-sticker herkend: ' + parsed.spcpartId);
+    resolveQrTargetAndStartPhotos(cached.project, cached.werkbon);
+    return;
+  }
+  showSpcpartLinkModal(parsed);
+}
+
+function showSpcpartLinkModal(parsed) {
+  const projects = state.projects || [];
+  state.modal = {
+    onClose: () => {},
+    render: m => {
+      m.appendChild(el('h3', {}, 'Smarticate-sticker koppelen'));
+      m.appendChild(el('div', { style: 'padding: 10px; background: var(--amber-light); color: var(--amber-dark); border-radius: var(--radius); font-size: 13px; margin-bottom: 12px;' },
+        'Deze QR-sticker komt van Smarticate (id: ', el('b', {}, parsed.spcpartId),
+        '). De QR bevat geen project/werkbon-info, dus eenmalig handmatig koppelen. Daarna onthoudt de app de koppeling.'
+      ));
+      m.appendChild(el('div', { style: 'font-size: 12px; color: var(--grey-500); margin-bottom: 8px;' },
+        'QR-inhoud: ' + (parsed.raw || '').slice(0, 80)));
+
+      const fldP = el('div', { class: 'field' });
+      fldP.appendChild(el('label', {}, 'Projectnummer (op de Smarticate-sticker zichtbaar)'));
+      const projInput = el('input', { type: 'text', placeholder: 'bv. 325277', list: 'spc-projects-' + parsed.spcpartId });
+      fldP.appendChild(projInput);
+      const dl = el('datalist', { id: 'spc-projects-' + parsed.spcpartId });
+      projects.forEach(p => dl.appendChild(el('option', { value: p.number })));
+      fldP.appendChild(dl);
+      m.appendChild(fldP);
+
+      const fldW = el('div', { class: 'field' });
+      fldW.appendChild(el('label', {}, 'Werkbonnummer (5-cijferig, bv. 11100 of 30300)'));
+      const wbInput = el('input', { type: 'text', placeholder: 'bv. 11100' });
+      fldW.appendChild(wbInput);
+      m.appendChild(fldW);
+
+      m.appendChild(el('div', { style: 'font-size: 12px; color: var(--grey-500); margin-bottom: 12px;' },
+        'Tip: kijk naar de tekst rechts naast de QR — daar staat het projectnr en werkbonnr.'
+      ));
+
+      m.appendChild(el('div', { class: 'actions', style: 'flex-wrap: wrap;' },
+        el('button', { class: 'btn', onClick: closeModal }, 'Annuleer'),
+        el('button', { class: 'btn primary', onClick: () => {
+          const proj = (projInput.value || '').trim();
+          const wb = (wbInput.value || '').trim();
+          if (!proj || !wb) { alert('Vul beide velden in.'); return; }
+          saveSpcpartMapping(parsed.spcpartId, proj, wb, '');
+          closeModal();
+          resolveQrTargetAndStartPhotos(proj, wb);
+        } }, 'Koppelen + doorgaan')
+      ));
+    }
+  };
+  render();
 }
 
 function inferPartFromWerkbonNr(wb) {
@@ -2496,7 +2573,9 @@ function startQrScanFlow() {
       m.appendChild(el('h3', {}, 'Scan QR-code'));
       if (camOk) {
         m.appendChild(el('p', { style: 'color: var(--grey-500); font-size: 13px;' },
-          'Richt de camera op de QR-sticker (formaat ', el('code', {}, '325277-10300'), ').'));
+          'Richt de camera op de QR-sticker. Werkt voor standaard Gpi-stickers (',
+          el('code', {}, '325277-10300'), ') én Smarticate-stickers (SPCPART…). ',
+          'Smarticate eenmaal koppelen, daarna onthoudt de app het.'));
         const reader = el('div', { id: 'qr-reader', class: 'qr-reader' });
         m.appendChild(reader);
         const status = el('div', { id: 'qr-status', style: 'font-size: 13px; color: var(--grey-500); text-align: center; margin-top: 10px;' }, 'Bezig met opstarten…');
@@ -2545,7 +2624,11 @@ async function scanQrFromImageFile(file) {
     const parsed = parseQrPayload(decoded);
     if (!parsed) { alert('QR-code gevonden maar onbekend formaat: ' + decoded); return; }
     closeModal();
-    resolveQrTargetAndStartPhotos(parsed.project, parsed.werkbon);
+    if (parsed.kind === 'spcpart') {
+      resolveSpcpartAndContinue(parsed);
+    } else {
+      resolveQrTargetAndStartPhotos(parsed.project, parsed.werkbon);
+    }
   } catch (e) {
     alert('Geen QR-code gevonden in de foto: ' + (e && e.message ? e.message : e));
   }
@@ -2582,15 +2665,23 @@ async function onQrDecoded(text, statusEl) {
   }
   await stopQrScanner();
   closeModal();
-  resolveQrTargetAndStartPhotos(parsed.project, parsed.werkbon);
+  if (parsed.kind === 'spcpart') {
+    resolveSpcpartAndContinue(parsed);
+  } else {
+    resolveQrTargetAndStartPhotos(parsed.project, parsed.werkbon);
+  }
 }
 
 function promptManualQrEntry() {
-  const v = prompt('Projectnummer-Werkbonnummer (bv. 325277-10300):');
+  const v = prompt('Projectnummer-Werkbonnummer (bv. 325277-10300) of SPCPART-id:');
   if (!v) return;
   const parsed = parseQrPayload(v);
   if (!parsed) { alert('Onbekend formaat. Verwacht: <projectnummer>-<werkbonnummer>'); return; }
-  resolveQrTargetAndStartPhotos(parsed.project, parsed.werkbon);
+  if (parsed.kind === 'spcpart') {
+    resolveSpcpartAndContinue(parsed);
+  } else {
+    resolveQrTargetAndStartPhotos(parsed.project, parsed.werkbon);
+  }
 }
 
 function resolveQrTargetAndStartPhotos(projectNumber, werkbonNumber) {
