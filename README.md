@@ -34,6 +34,7 @@ Deze repo wordt gehost via GitHub Pages. De app draait volledig client-side — 
 
 ## Versie
 
+**v2.5.4** (2026-05-02) — Iconen + wordmark transparante achtergrond (alleen maskable houdt wit voor Android adaptive).
 **v2.5.3** (2026-05-02) — App-iconen voller (scene zonder witte rand, +18% zoom). Top-bar krijgt scene-icoon naast wordmark.
 **v2.5.2** (2026-05-02) — Wordmark crop-fix (top van "Gpi" was afgesneden) + mobile responsive top-bar (geen knop-overlap meer op smalle schermen).
 **v2.5.1** (2026-05-02) — Nieuwe Gpi · Floorscanner brand: hero-illustratie (worker+tank+scan-beam) als app-iconen op alle maten. Top-bar wordmark vervangen door Gpi Floorscanner.

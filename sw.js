@@ -1,4 +1,4 @@
-/* FloorScan PWA service worker — v2.5.3
+/* FloorScan PWA service worker — v2.5.4
  *
  * Strategy:
  *   - App-shell (HTML, manifest, icons): cache-first, fall back to network.
@@ -45,6 +45,10 @@
  *   - App-iconen +18% gezoomd zodat scene de canvas vult (was te veel witruimte).
  *   - Top-bar: scene-icoon links toegevoegd (logo-floorscanner-scene.png) ZIJ aan zij met de
  *     wordmark. Scene-icoon is 44px op desktop, 36px op mobiel.
+ * v2.5.4 toevoeging:
+ *   - Iconen RGBA met transparant wit (alpha-ramp via afstand-tot-wit). Maskable houdt witte
+ *     achtergrond — Android adaptive icons moeten safe-zone vullen.
+ *   - Wordmark + scene-icoon ook transparent zodat ze schoon over elke achtergrond passen.
  *
  * Notes:
  *   - POSTs naar share-target worden afgevangen; alle andere POSTs gaan door.
@@ -53,7 +57,7 @@
  *     network requests, the SW never sees them.
  */
 
-const SW_VERSION = 'v2.5.3';
+const SW_VERSION = 'v2.5.4';
 const CACHE_SHELL = `floorscan-shell-${SW_VERSION}`;
 const CACHE_CDN   = `floorscan-cdn-${SW_VERSION}`;
 const SHARE_INBOX_DB = 'floorscan_share';
