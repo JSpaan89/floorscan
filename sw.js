@@ -1,4 +1,4 @@
-/* FloorScan PWA service worker — v2.5.0
+/* FloorScan PWA service worker — v2.5.1
  *
  * Strategy:
  *   - App-shell (HTML, manifest, icons): cache-first, fall back to network.
@@ -31,6 +31,11 @@
  *   - Cards en panels met teal top-border accent.
  *   - Cw-banner (huidige week) als donker gpi-black blok met dashed teal cirkel.
  *   - Logo-asset (logo-gpi-group.png) toegevoegd aan precache.
+ * v2.5.1 toevoeging:
+ *   - Nieuwe Gpi · Floorscanner brand: app-iconen (32/192/512/maskable) gegenereerd uit
+ *     hero-illustratie (worker + tank + scan-beam).
+ *   - Top-bar wordmark vervangen: 'logo-gpi-group.png' → 'logo-floorscanner-wordmark.png'
+ *     (Gpi · Floorscanner met tagline). Naam-regel weggelaten omdat 't in wordmark zit.
  *
  * Notes:
  *   - POSTs naar share-target worden afgevangen; alle andere POSTs gaan door.
@@ -39,7 +44,7 @@
  *     network requests, the SW never sees them.
  */
 
-const SW_VERSION = 'v2.5.0';
+const SW_VERSION = 'v2.5.1';
 const CACHE_SHELL = `floorscan-shell-${SW_VERSION}`;
 const CACHE_CDN   = `floorscan-cdn-${SW_VERSION}`;
 const SHARE_INBOX_DB = 'floorscan_share';
@@ -52,7 +57,7 @@ const SHELL_ASSETS = [
   './',
   './FloorScan_pilot_v24.html',
   './manifest.webmanifest',
-  './logo-gpi-group.png',
+  './logo-floorscanner-wordmark.png',
   './icon-192.png',
   './icon-512.png',
   './icon-512-maskable.png',
