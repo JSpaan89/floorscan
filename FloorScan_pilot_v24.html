@@ -295,10 +295,15 @@ h3 { margin: 18px 0 8px; font-size: 11px; color: var(--grey-500); font-weight: 6
 /* Mobile-first */
 @media (max-width: 700px) {
   html, body { font-size: 16px; }
-  .top { padding: 10px 14px; }
+  .top { padding: 10px 12px; flex-wrap: wrap; gap: 8px; }
   .top h1 { font-size: 16px; }
   .top h1 .tag { display: none; }
-  .top-actions { gap: 6px; }
+  .top-brand .divider { display: none; }
+  .top-brand .product .eyebrow { display: none; }
+  .top-brand img.logo { height: 36px !important; }
+  .top-actions { gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: 0 1 auto; }
+  .top-actions .btn.ghost { padding: 6px 10px; font-size: 13px; min-height: 36px; }
+  .sync-status { padding: 6px 10px; font-size: 11px; }
   .week-pill { padding: 6px 10px; font-size: 13px; }
   .crumbs { padding: 8px 14px; font-size: 13px; }
   .main { padding: 14px; }
@@ -401,7 +406,7 @@ h3 { margin: 18px 0 8px; font-size: 11px; color: var(--grey-500); font-weight: 6
 //  - Validatie + preview-modal voor import (vervang of merge)
 // Doel-platform: Android tablets (Chrome/Edge) + Windows desktop (Chrome/Edge).
 // ------------------------------------------------------------------
-const FLOORSCAN_VERSION = 'v2.5.1';
+const FLOORSCAN_VERSION = 'v2.5.2';
 
 const STORAGE_KEY = 'floorscan_v2';
 const USER_KEY = 'floorscan_user';

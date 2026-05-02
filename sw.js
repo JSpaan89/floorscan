@@ -1,4 +1,4 @@
-/* FloorScan PWA service worker — v2.5.1
+/* FloorScan PWA service worker — v2.5.2
  *
  * Strategy:
  *   - App-shell (HTML, manifest, icons): cache-first, fall back to network.
@@ -36,6 +36,11 @@
  *     hero-illustratie (worker + tank + scan-beam).
  *   - Top-bar wordmark vervangen: 'logo-gpi-group.png' → 'logo-floorscanner-wordmark.png'
  *     (Gpi · Floorscanner met tagline). Naam-regel weggelaten omdat 't in wordmark zit.
+ * v2.5.2 toevoeging:
+ *   - Wordmark crop fix: bovenkant van "Gpi" werd afgesneden door te lage wm_top — opnieuw
+ *     gegenereerd met bredere bounds (388x128 ipv 543x96).
+ *   - Mobile responsive top-bar: divider en eyebrow verbergen op <700px, top-actions wrappen,
+ *     sync-status compacter. Voorkomt dat knoppen over elkaar heen vallen.
  *
  * Notes:
  *   - POSTs naar share-target worden afgevangen; alle andere POSTs gaan door.
@@ -44,7 +49,7 @@
  *     network requests, the SW never sees them.
  */
 
-const SW_VERSION = 'v2.5.1';
+const SW_VERSION = 'v2.5.2';
 const CACHE_SHELL = `floorscan-shell-${SW_VERSION}`;
 const CACHE_CDN   = `floorscan-cdn-${SW_VERSION}`;
 const SHARE_INBOX_DB = 'floorscan_share';
