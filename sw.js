@@ -1,4 +1,4 @@
-/* FloorScan PWA service worker — v2.5.2
+/* FloorScan PWA service worker — v2.5.3
  *
  * Strategy:
  *   - App-shell (HTML, manifest, icons): cache-first, fall back to network.
@@ -41,6 +41,10 @@
  *     gegenereerd met bredere bounds (388x128 ipv 543x96).
  *   - Mobile responsive top-bar: divider en eyebrow verbergen op <700px, top-actions wrappen,
  *     sync-status compacter. Voorkomt dat knoppen over elkaar heen vallen.
+ * v2.5.3 toevoeging:
+ *   - App-iconen +18% gezoomd zodat scene de canvas vult (was te veel witruimte).
+ *   - Top-bar: scene-icoon links toegevoegd (logo-floorscanner-scene.png) ZIJ aan zij met de
+ *     wordmark. Scene-icoon is 44px op desktop, 36px op mobiel.
  *
  * Notes:
  *   - POSTs naar share-target worden afgevangen; alle andere POSTs gaan door.
@@ -49,7 +53,7 @@
  *     network requests, the SW never sees them.
  */
 
-const SW_VERSION = 'v2.5.2';
+const SW_VERSION = 'v2.5.3';
 const CACHE_SHELL = `floorscan-shell-${SW_VERSION}`;
 const CACHE_CDN   = `floorscan-cdn-${SW_VERSION}`;
 const SHARE_INBOX_DB = 'floorscan_share';
@@ -63,6 +67,7 @@ const SHELL_ASSETS = [
   './FloorScan_pilot_v24.html',
   './manifest.webmanifest',
   './logo-floorscanner-wordmark.png',
+  './logo-floorscanner-scene.png',
   './icon-192.png',
   './icon-512.png',
   './icon-512-maskable.png',
