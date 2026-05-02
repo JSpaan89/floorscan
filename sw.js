@@ -1,4 +1,4 @@
-/* FloorScan PWA service worker — v2.4.4
+/* FloorScan PWA service worker — v2.5.0
  *
  * Strategy:
  *   - App-shell (HTML, manifest, icons): cache-first, fall back to network.
@@ -24,6 +24,13 @@
  *   - Lightbox-beeld groter: 98vw × 82vh max (was 95vw × 75vh).
  *   - Header-versie label dynamisch via FLOORSCAN_VERSION constante.
  *   - Lightbox titel kan ook callback (idx) zijn voor dynamische label per foto.
+ * v2.5.0 toevoeging:
+ *   - Volledige Gpi Group huisstijl: Sofia Sans font (Google Fonts CDN), nieuwe teal #00B3A0,
+ *     gpi-black #211F26, sharp corners (radius 0px), warm grey neutrals, indigo AI-box.
+ *   - Top-bar: Gpi Group logo + product-block (eyebrow "Gpi Tanks · Pilot v2.5.0" + name "FloorScan").
+ *   - Cards en panels met teal top-border accent.
+ *   - Cw-banner (huidige week) als donker gpi-black blok met dashed teal cirkel.
+ *   - Logo-asset (logo-gpi-group.png) toegevoegd aan precache.
  *
  * Notes:
  *   - POSTs naar share-target worden afgevangen; alle andere POSTs gaan door.
@@ -32,7 +39,7 @@
  *     network requests, the SW never sees them.
  */
 
-const SW_VERSION = 'v2.4.4';
+const SW_VERSION = 'v2.5.0';
 const CACHE_SHELL = `floorscan-shell-${SW_VERSION}`;
 const CACHE_CDN   = `floorscan-cdn-${SW_VERSION}`;
 const SHARE_INBOX_DB = 'floorscan_share';
@@ -45,14 +52,15 @@ const SHELL_ASSETS = [
   './',
   './FloorScan_pilot_v24.html',
   './manifest.webmanifest',
+  './logo-gpi-group.png',
   './icon-192.png',
   './icon-512.png',
   './icon-512-maskable.png',
   './icon-32.png'
 ];
 
-// CDN URLs we want to cache for offline.
-const CDN_HOSTS = ['cdnjs.cloudflare.com'];
+// CDN URLs we want to cache for offline (network-first, cache-fallback).
+const CDN_HOSTS = ['cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
